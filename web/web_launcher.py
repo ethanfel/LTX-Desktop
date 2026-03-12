@@ -81,8 +81,7 @@ async def upload_file(file: UploadFile = File(...)) -> dict[str, str]:
     filename = f"{uuid.uuid4().hex[:8]}_{file.filename or 'upload'}"
     dest = UPLOADS_DIR / filename
     with open(dest, "wb") as f:
-        content = await file.read()
-        f.write(content)
+        shutil.copyfileobj(file.file, f)
     return {
         "path": str(dest),
         "url": f"/api/files/serve/{dest.relative_to(FILE_ROOT)}",
@@ -125,7 +124,10 @@ async def extract_frame(req: ExtractFrameRequest) -> dict[str, str]:
     if req.quality:
         cmd += ["-q:v", str(req.quality)]
     cmd.append(str(out_path))
-    subprocess.run(cmd, capture_output=True, timeout=30)
+    try:
+        subprocess.run(cmd, capture_output=True, timeout=30)
+    except subprocess.TimeoutExpired:
+        return JSONResponse(status_code=500, content={"error": "Frame extraction timed out"})  # type: ignore[return-value]
     if not out_path.is_file():
         return JSONResponse(status_code=500, content={"error": "Frame extraction failed"})  # type: ignore[return-value]
     url = f"/api/files/serve/{out_path.relative_to(FILE_ROOT)}"
