@@ -1,0 +1,39 @@
+##############################################################################
+# LTX Desktop Web UI — Docker Compose for Unraid with NVIDIA GPU
+#
+# Usage:
+#   docker compose -f web/docker-compose.yml up -d
+#
+# Then open http://<your-unraid-ip>:6080 in your browser.
+##############################################################################
+
+services:
+  ltx-web:
+    build:
+      context: ..
+      dockerfile: web/Dockerfile
+    container_name: ltx-web
+    restart: unless-stopped
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+    ports:
+      - "6080:6080"
+
+    volumes:
+      - ltx-data:/data
+
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility,video
+
+    shm_size: "8gb"
+
+volumes:
+  ltx-data:
