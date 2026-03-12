@@ -1,12 +1,14 @@
 """Web launcher — wraps the original LTX backend with file routes for browser UI."""
 import os
 import sys
+import time
 import uuid
 import shutil
 import mimetypes
 import subprocess
 import base64
 import logging
+import threading
 from pathlib import Path
 
 # Add backend to sys.path so we can import the original app
@@ -69,6 +71,28 @@ DOWNLOADS_DIR = FILE_ROOT / "downloads"
 def _ensure_dirs() -> None:
     for d in [UPLOADS_DIR, TEMP_DIR, ASSETS_DIR, DOWNLOADS_DIR]:
         d.mkdir(parents=True, exist_ok=True)
+
+# Max age for temp files before cleanup (1 hour)
+TEMP_MAX_AGE_SECS = 3600
+
+def _cleanup_temp() -> None:
+    """Remove temp files older than TEMP_MAX_AGE_SECS."""
+    now = time.time()
+    try:
+        for f in TEMP_DIR.iterdir():
+            if f.is_file() and (now - f.stat().st_mtime) > TEMP_MAX_AGE_SECS:
+                f.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+def _start_temp_cleanup_loop() -> None:
+    """Run temp cleanup every 30 minutes in a background thread."""
+    def loop() -> None:
+        while True:
+            time.sleep(1800)
+            _cleanup_temp()
+    t = threading.Thread(target=loop, daemon=True)
+    t.start()
 
 # --- Build the file router ---
 
@@ -175,6 +199,8 @@ async def read_file(path: str) -> dict[str, str]:
 
 def main() -> None:
     _ensure_dirs()
+    _cleanup_temp()
+    _start_temp_cleanup_loop()
 
     # Change to backend dir so relative imports in ltx2_server work
     os.chdir(str(BACKEND_DIR))
