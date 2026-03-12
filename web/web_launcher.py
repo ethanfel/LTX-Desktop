@@ -76,9 +76,14 @@ from fastapi import APIRouter
 
 file_router = APIRouter(prefix="/api/files", tags=["files"])
 
+def _sanitize_filename(name: str) -> str:
+    """Remove path separators to prevent directory escape."""
+    return name.replace("/", "_").replace("\\", "_")
+
 @file_router.post("/upload")
 async def upload_file(file: UploadFile = File(...)) -> dict[str, str]:
-    filename = f"{uuid.uuid4().hex[:8]}_{file.filename or 'upload'}"
+    safe_name = _sanitize_filename(file.filename or "upload")
+    filename = f"{uuid.uuid4().hex[:8]}_{safe_name}"
     dest = UPLOADS_DIR / filename
     with open(dest, "wb") as f:
         shutil.copyfileobj(file.file, f)
@@ -86,6 +91,17 @@ async def upload_file(file: UploadFile = File(...)) -> dict[str, str]:
         "path": str(dest),
         "url": f"/api/files/serve/{dest.relative_to(FILE_ROOT)}",
     }
+
+@file_router.post("/upload-binary")
+async def upload_binary(file: UploadFile = File(...), path: str = "") -> dict[str, object]:
+    """Write uploaded binary data to a specific server path."""
+    if not path or not _is_safe_path(path):
+        return {"success": False, "error": "Path not allowed"}
+    dest = Path(path)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    with open(dest, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+    return {"success": True, "path": str(dest)}
 
 @file_router.get("/serve/{file_path:path}")
 async def serve_file(file_path: str) -> FileResponse:

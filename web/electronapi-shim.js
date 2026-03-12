@@ -238,6 +238,8 @@
 
     // File operations → backend endpoints
     readLocalFile: function (filePath) {
+      // Strip file:// prefix — frontend often passes file:// URLs (e.g. AudioWaveform)
+      if (filePath.startsWith("file://")) filePath = decodeURIComponent(filePath.slice(7));
       return fetch("/api/files/read?path=" + encodeURIComponent(filePath))
         .then(function (r) { return r.json(); });
     },
@@ -246,26 +248,28 @@
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ path: filePath, data: data, encoding: encoding || "utf-8" }),
-      }).then(function (r) { return r.json(); });
-      // NOTE: No auto-download here. Internal saves (project JSON, settings)
-      // should not trigger browser downloads. Use triggerDownload() explicitly
-      // for user-facing exports.
+      }).then(function (r) { return r.json(); }).then(function (result) {
+        // Auto-download files saved to /downloads/ (user-facing exports like subtitles)
+        if (result.success && filePath.startsWith(FILE_ROOT + "/downloads/")) {
+          triggerDownload(filePath);
+        }
+        return result;
+      });
     },
     saveBinaryFile: function (filePath, data) {
-      // Convert ArrayBuffer to base64 using chunked approach for large files
-      var bytes = new Uint8Array(data);
-      var chunkSize = 32768;
-      var parts = [];
-      for (var i = 0; i < bytes.length; i += chunkSize) {
-        var chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
-        parts.push(String.fromCharCode.apply(null, chunk));
-      }
-      var b64 = btoa(parts.join(""));
-      return fetch("/api/files/write", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path: filePath, data: b64, encoding: "base64" }),
-      }).then(function (r) { return r.json(); });
+      // Upload binary data as multipart form (avoids base64 bloat and stack overflow)
+      var blob = new Blob([data]);
+      var form = new FormData();
+      form.append("file", blob, filePath.split("/").pop() || "binary");
+      form.append("path", filePath);
+      return fetch("/api/files/upload-binary", { method: "POST", body: form })
+        .then(function (r) { return r.json(); })
+        .then(function (result) {
+          if (result.success && filePath.startsWith(FILE_ROOT + "/downloads/")) {
+            triggerDownload(filePath);
+          }
+          return result;
+        });
     },
     copyToProjectAssets: function (srcPath, projectId) {
       return fetch("/api/files/copy-to-assets", {
