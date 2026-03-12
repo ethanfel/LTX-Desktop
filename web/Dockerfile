@@ -41,8 +41,8 @@ COPY --from=ghcr.io/astral-sh/uv:0.7 /uv /usr/local/bin/uv
 WORKDIR /app
 COPY backend/ backend/
 RUN cd backend \
-    && uv python install 3.13.12 \
-    && uv sync --frozen
+    && uv python install 3.13 \
+    && uv sync --frozen --python 3.13
 
 # Copy built frontend from stage 1
 COPY --from=frontend-builder /build/dist /srv/frontend
