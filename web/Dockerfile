@@ -52,7 +52,8 @@ COPY web/electronapi-shim.js /srv/electronapi-shim.js
 COPY web/web_launcher.py /app/web/web_launcher.py
 COPY web/nginx.conf /etc/nginx/nginx.conf
 COPY web/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+RUN chmod +x /entrypoint.sh \
+    && chmod -R a+r /srv/
 
 # Settings fallback (default settings.json from repo root)
 COPY settings.json /app/settings.json
