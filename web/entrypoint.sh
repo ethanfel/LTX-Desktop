@@ -21,4 +21,4 @@ nginx
 
 # Start the Python backend in foreground (container lifecycle tied to this)
 cd /app/backend
-exec uv run python /app/web/web_launcher.py
+exec uv run --python 3.13 python /app/web/web_launcher.py
