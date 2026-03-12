@@ -1,0 +1,49 @@
+##############################################################################
+# LTX Desktop – Docker Compose for Unraid with NVIDIA GPU
+#
+# Usage:
+#   docker compose -f docker/docker-compose.yml up -d
+#
+# Then open http://<your-unraid-ip>:6080/vnc.html in your browser.
+##############################################################################
+
+services:
+  ltx-desktop:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: ltx-desktop
+    restart: unless-stopped
+
+    # ── NVIDIA GPU passthrough ───────────────────────────────────────────
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+    # ── Ports ────────────────────────────────────────────────────────────
+    ports:
+      - "6080:6080"   # noVNC web UI
+
+    # ── Persistent storage ───────────────────────────────────────────────
+    # XDG_DATA_HOME=/data → Electron stores everything under /data/LTXDesktop
+    # (models, settings, outputs, logs)
+    volumes:
+      - ltx-data:/data
+
+    # ── Environment ──────────────────────────────────────────────────────
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility,video
+      - RESOLUTION=1920x1080x24
+      # Optional: set a VNC password (unset = no auth)
+      # - VNC_PASSWORD=changeme
+
+    # ── Resource hints ───────────────────────────────────────────────────
+    shm_size: "8gb"   # PyTorch shared memory
+
+volumes:
+  ltx-data:
