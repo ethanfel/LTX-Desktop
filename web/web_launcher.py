@@ -19,7 +19,7 @@ os.environ.setdefault("LTX_APP_DATA_DIR", "/data/LTXDesktop")
 os.environ["LTX_AUTH_TOKEN"] = ""      # No auth for web UI
 os.environ["LTX_ADMIN_TOKEN"] = ""
 
-from fastapi import UploadFile, File
+from fastapi import UploadFile, File, Form
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -93,7 +93,7 @@ async def upload_file(file: UploadFile = File(...)) -> dict[str, str]:
     }
 
 @file_router.post("/upload-binary")
-async def upload_binary(file: UploadFile = File(...), path: str = "") -> dict[str, object]:
+async def upload_binary(file: UploadFile = File(...), path: str = Form(...)) -> dict[str, object]:
     """Write uploaded binary data to a specific server path."""
     if not path or not _is_safe_path(path):
         return {"success": False, "error": "Path not allowed"}
