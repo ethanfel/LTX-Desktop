@@ -15,6 +15,7 @@ RUN corepack enable && corepack prepare pnpm@10.30.3 --activate \
 
 # Copy only what Vite needs (not backend/, .git/, etc.)
 COPY index.html vite.config.ts tsconfig.json tsconfig.node.json ./
+COPY tailwind.config.js postcss.config.js ./
 COPY frontend/ frontend/
 COPY electron/ electron/
 COPY public/ public/
