@@ -4,11 +4,18 @@ import { logger } from '../lib/logger'
 
 export type IcLoraConditioningType = 'canny' | 'depth' | 'pose'
 
+export interface IcLoraStyleImage {
+  path: string
+  frameIdx: number
+  strength: number
+}
+
 export interface IcLoraSubmitParams {
   videoPath: string
   conditioningType: IcLoraConditioningType
   conditioningStrength: number
   prompt: string
+  images?: IcLoraStyleImage[]
 }
 
 export interface IcLoraResult {
@@ -50,6 +57,13 @@ export function useIcLora() {
           conditioning_type: params.conditioningType,
           conditioning_strength: params.conditioningStrength,
           prompt: params.prompt,
+          ...(params.images && params.images.length > 0 && {
+            images: params.images.map(img => ({
+              path: img.path,
+              frame_idx: img.frameIdx,
+              strength: img.strength,
+            })),
+          }),
         }),
       })
 

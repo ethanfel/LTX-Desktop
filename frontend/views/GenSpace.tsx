@@ -1079,6 +1079,8 @@ export function GenSpace() {
     videoPath: null as string | null,
     conditioningType: 'canny' as ICLoraConditioningType,
     conditioningStrength: 1.0,
+    styleImagePath: null as string | null,
+    styleImageStrength: 1.0,
     ready: false,
   })
   const [icLoraPanelKey, setIcLoraPanelKey] = useState(0)
@@ -1422,6 +1424,9 @@ export function GenSpace() {
         conditioningType: icLoraCondType,
         conditioningStrength: icLoraStrength,
         prompt,
+        ...(icLoraInput.styleImagePath && {
+          images: [{ path: icLoraInput.styleImagePath, frameIdx: 0, strength: icLoraInput.styleImageStrength }],
+        }),
       })
       return
     }

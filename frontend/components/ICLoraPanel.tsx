@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import {
-  Upload, Loader2, Film, Sparkles,
+  Upload, Loader2, Film, Sparkles, ImageIcon,
   RefreshCw, Download, AlertCircle, Trash2,
 } from 'lucide-react'
 import { backendFetch } from '../lib/backend'
@@ -50,11 +50,17 @@ interface ICLoraPanelProps {
   onConditioningStrengthChange?: (strength: number) => void
   outputVideoUrl?: string | null
   outputVideoPath?: string | null
+  styleImagePath?: string | null
+  onStyleImageChange?: (path: string | null) => void
+  styleImageStrength?: number
+  onStyleImageStrengthChange?: (strength: number) => void
   onChange?: (data: {
     videoUrl: string | null
     videoPath: string | null
     conditioningType: ICLoraConditioningType
     conditioningStrength: number
+    styleImagePath: string | null
+    styleImageStrength: number
     ready: boolean
   }) => void
 }
@@ -93,6 +99,10 @@ export function ICLoraPanel({
   onConditioningTypeChange,
   conditioningStrength: conditioningStrengthProp,
   onConditioningStrengthChange,
+  styleImagePath: styleImagePathProp,
+  onStyleImageChange,
+  styleImageStrength: styleImageStrengthProp,
+  onStyleImageStrengthChange,
   outputVideoUrl,
   outputVideoPath: _outputVideoPath,
   onChange,
@@ -108,6 +118,11 @@ export function ICLoraPanel({
   const conditioningStrength = conditioningStrengthProp ?? internalCondStrength
   const [conditioningPreview, setConditioningPreview] = useState<string | null>(null)
   const [isExtracting, setIsExtracting] = useState(false)
+
+  const [internalStyleImagePath, setInternalStyleImagePath] = useState<string | null>(null)
+  const [internalStyleImageStrength, setInternalStyleImageStrength] = useState(1.0)
+  const styleImagePath = styleImagePathProp ?? internalStyleImagePath
+  const styleImageStrength = styleImageStrengthProp ?? internalStyleImageStrength
 
   const [icModelDownloaded, setIcModelDownloaded] = useState<Record<IcLoraModelId, boolean>>({ ...EMPTY_IC_MODEL_STATUS })
   const [isCheckingIcLora, setIsCheckingIcLora] = useState(false)
@@ -130,6 +145,10 @@ export function ICLoraPanel({
     onConditioningStrengthChange?.(1.0)
     setConditioningPreview(null)
     setExtractError(null)
+    setInternalStyleImagePath(null)
+    setInternalStyleImageStrength(1.0)
+    onStyleImageChange?.(null)
+    onStyleImageStrengthChange?.(1.0)
   }, [resetKey, initialVideoUrl, initialVideoPath]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -139,9 +158,11 @@ export function ICLoraPanel({
       videoPath: inputVideoPath,
       conditioningType,
       conditioningStrength,
+      styleImagePath,
+      styleImageStrength,
       ready,
     })
-  }, [inputVideoUrl, inputVideoPath, conditioningType, conditioningStrength, icLoraReady, onChange])
+  }, [inputVideoUrl, inputVideoPath, conditioningType, conditioningStrength, styleImagePath, styleImageStrength, icLoraReady, onChange])
 
   const checkIcLoraAvailability = useCallback(async () => {
     setIsCheckingIcLora(true)
@@ -322,6 +343,23 @@ export function ICLoraPanel({
     setConditioningPreview(null)
     setExtractError(null)
   }, [])
+
+  const handleBrowseStyleImage = useCallback(async () => {
+    const paths = await window.electronAPI.showOpenFileDialog({
+      title: 'Select Style Reference Image',
+      filters: [{ name: 'Image', extensions: ['png', 'jpg', 'jpeg', 'webp', 'bmp'] }],
+    })
+    if (paths && paths.length > 0) {
+      const filePath = paths[0]
+      setInternalStyleImagePath(filePath)
+      onStyleImageChange?.(filePath)
+    }
+  }, [onStyleImageChange])
+
+  const handleClearStyleImage = useCallback(() => {
+    setInternalStyleImagePath(null)
+    onStyleImageChange?.(null)
+  }, [onStyleImageChange])
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -545,6 +583,65 @@ export function ICLoraPanel({
                 </div>
               )}
             </div>
+          </div>
+
+          {/* Style image column */}
+          <div className="w-48 flex flex-col border-l border-zinc-800 flex-shrink-0">
+            <div className="px-3 py-2 border-b border-zinc-800 flex items-center justify-between gap-2">
+              <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Style</span>
+              {styleImagePath && (
+                <button
+                  onClick={handleClearStyleImage}
+                  className="p-0.5 rounded hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
+                  title="Remove style image"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </button>
+              )}
+            </div>
+            <div className="flex-1 bg-black flex items-center justify-center min-h-0">
+              {styleImagePath ? (
+                <img
+                  src={pathToFileUrl(styleImagePath)}
+                  alt="Style reference"
+                  className="w-full h-full object-contain"
+                />
+              ) : (
+                <div className="text-center p-3">
+                  <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center mx-auto mb-2">
+                    <ImageIcon className="h-5 w-5 text-zinc-600" />
+                  </div>
+                  <p className="text-zinc-500 text-[10px] mb-2">Style reference (optional)</p>
+                  <button
+                    onClick={handleBrowseStyleImage}
+                    className="px-2.5 py-1 text-[10px] text-amber-400 border border-amber-500/30 rounded-lg hover:bg-amber-600/10 transition-colors"
+                  >
+                    Browse
+                  </button>
+                </div>
+              )}
+            </div>
+            {styleImagePath && (
+              <div className="px-3 py-2 border-t border-zinc-800">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[10px] text-zinc-400">Strength</span>
+                  <span className="text-[10px] text-zinc-300">{styleImageStrength.toFixed(2)}</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={styleImageStrength}
+                  onChange={(e) => {
+                    const v = parseFloat(e.target.value)
+                    setInternalStyleImageStrength(v)
+                    onStyleImageStrengthChange?.(v)
+                  }}
+                  className="w-full h-1 bg-zinc-700 rounded-full appearance-none cursor-pointer accent-amber-500"
+                />
+              </div>
+            )}
           </div>
 
           {/* Output column */}
