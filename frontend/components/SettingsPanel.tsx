@@ -122,6 +122,7 @@ export function SettingsPanel({
           disabled={disabled}
         >
           <option value="fast">LTX 2.3 Fast</option>
+          <option value="pro">LTX 2.3 Pro</option>
         </Select>
       ) : (
         <Select
@@ -305,7 +306,7 @@ function AdvancedSection({
               className="w-full rounded-md border border-zinc-700 bg-zinc-800 px-2.5 py-2 text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500 focus:border-zinc-500 disabled:cursor-not-allowed disabled:opacity-50 resize-y"
             />
             <p className="text-[10px] text-zinc-600">
-              Works with audio-to-video and quality retake modes only.
+              Works with Pro model, audio-to-video, and quality retake modes.
             </p>
           </div>
 

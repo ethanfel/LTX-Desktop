@@ -35,6 +35,7 @@ from services.interfaces import (
     LTXAPIClient,
     ModelDownloader,
     PoseProcessorPipeline,
+    ProVideoPipeline,
     RetakePipeline,
     TaskRunner,
     TextEncoder,
@@ -66,6 +67,7 @@ class AppHandler:
         pose_processor_pipeline_class: type[PoseProcessorPipeline],
         a2v_pipeline_class: type[A2VPipeline],
         retake_pipeline_class: type[RetakePipeline],
+        pro_video_pipeline_class: type[ProVideoPipeline],
     ) -> None:
         self.config = config
 
@@ -79,6 +81,7 @@ class AppHandler:
         self.ltx_api_client = ltx_api_client
         self.zit_api_client = zit_api_client
         self.fast_video_pipeline_class = fast_video_pipeline_class
+        self.pro_video_pipeline_class = pro_video_pipeline_class
         self.image_generation_pipeline_class = image_generation_pipeline_class
         self.ic_lora_pipeline_class = ic_lora_pipeline_class
         self.depth_processor_pipeline_class = depth_processor_pipeline_class
@@ -91,6 +94,7 @@ class AppHandler:
         self.state = AppState(
             available_files={
                 "checkpoint": None,
+                "full_checkpoint": None,
                 "upsampler": None,
                 "distilled_lora": None,
                 "ic_lora": None,
@@ -153,6 +157,7 @@ class AppHandler:
             pose_processor_pipeline_class=pose_processor_pipeline_class,
             a2v_pipeline_class=a2v_pipeline_class,
             retake_pipeline_class=retake_pipeline_class,
+            pro_video_pipeline_class=pro_video_pipeline_class,
             config=config,
         )
 
@@ -237,11 +242,13 @@ class ServiceBundle:
     pose_processor_pipeline_class: type[PoseProcessorPipeline]
     a2v_pipeline_class: type[A2VPipeline]
     retake_pipeline_class: type[RetakePipeline]
+    pro_video_pipeline_class: type[ProVideoPipeline]
 
 
 def build_default_service_bundle(config: RuntimeConfig) -> ServiceBundle:
     """Build real runtime services with lazy heavy imports isolated from tests."""
     from services.fast_video_pipeline.ltx_fast_video_pipeline import LTXFastVideoPipeline
+    from services.pro_video_pipeline.ltx_pro_video_pipeline import LTXProVideoPipeline
     from services.zit_api_client.zit_api_client_impl import ZitAPIClientImpl
     from services.gpu_cleaner.torch_cleaner import TorchCleaner
     from services.gpu_info.gpu_info_impl import GpuInfoImpl
@@ -281,6 +288,7 @@ def build_default_service_bundle(config: RuntimeConfig) -> ServiceBundle:
         pose_processor_pipeline_class=DWPosePipeline,
         a2v_pipeline_class=LTXa2vPipeline,
         retake_pipeline_class=LTXRetakePipeline,
+        pro_video_pipeline_class=LTXProVideoPipeline,
     )
 
 
@@ -310,4 +318,5 @@ def build_initial_state(
         pose_processor_pipeline_class=bundle.pose_processor_pipeline_class,
         a2v_pipeline_class=bundle.a2v_pipeline_class,
         retake_pipeline_class=bundle.retake_pipeline_class,
+        pro_video_pipeline_class=bundle.pro_video_pipeline_class,
     )

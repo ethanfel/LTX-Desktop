@@ -97,7 +97,8 @@ class VideoGenerationHandler(StateHandlerBase):
         if audio_path:
             return self._generate_a2v(req, duration, fps, audio_path=audio_path)
 
-        logger.info("Resolution %s - using fast pipeline", resolution)
+        model_type = req.model if req.model in ("fast", "pro") else "fast"
+        logger.info("Resolution %s - using %s pipeline", resolution, model_type)
 
         RESOLUTION_MAP_16_9: dict[str, tuple[int, int]] = {
             "540p": (960, 544),
@@ -136,7 +137,7 @@ class VideoGenerationHandler(StateHandlerBase):
         seed = self._resolve_seed()
 
         try:
-            self._pipelines.load_gpu_pipeline("fast", should_warm=False, lora_path=lora_path, lora_strength=lora_strength)
+            self._pipelines.load_gpu_pipeline(model_type, should_warm=False, lora_path=lora_path, lora_strength=lora_strength)
             self._generation.start_generation(generation_id)
 
             output_path = self.generate_video(
@@ -153,6 +154,7 @@ class VideoGenerationHandler(StateHandlerBase):
                 lora_strength=lora_strength,
                 last_frame_image=last_frame_image,
                 last_frame_strength=req.lastFrameStrength,
+                model_type=model_type,
             )
 
             self._generation.complete_generation(output_path)
@@ -181,11 +183,12 @@ class VideoGenerationHandler(StateHandlerBase):
         lora_strength: float = 1.0,
         last_frame_image: Image.Image | None = None,
         last_frame_strength: float = 1.0,
+        model_type: str = "fast",
     ) -> str:
         t_total_start = time.perf_counter()
         has_any_image = image is not None or last_frame_image is not None
         gen_mode = "i2v" if has_any_image else "t2v"
-        logger.info("[%s] Generation started (model=fast, %dx%d, %d frames, %d fps)", gen_mode, width, height, num_frames, int(fps))
+        logger.info("[%s] Generation started (model=%s, %dx%d, %d frames, %d fps)", gen_mode, model_type, width, height, num_frames, int(fps))
 
         if self._generation.is_generation_cancelled():
             raise RuntimeError("Generation was cancelled")
@@ -197,7 +200,7 @@ class VideoGenerationHandler(StateHandlerBase):
 
         self._generation.update_progress("loading_model", 5, 0, total_steps)
         t_load_start = time.perf_counter()
-        pipeline_state = self._pipelines.load_gpu_pipeline("fast", should_warm=False, lora_path=lora_path, lora_strength=lora_strength)
+        pipeline_state = self._pipelines.load_gpu_pipeline(model_type, should_warm=False, lora_path=lora_path, lora_strength=lora_strength)
         t_load_end = time.perf_counter()
         logger.info("[%s] Pipeline load: %.2fs", gen_mode, t_load_end - t_load_start)
 
@@ -239,16 +242,31 @@ class VideoGenerationHandler(StateHandlerBase):
             width = round(width / 64) * 64
 
             t_inference_start = time.perf_counter()
-            pipeline_state.pipeline.generate(
-                prompt=enhanced_prompt,
-                seed=seed,
-                height=height,
-                width=width,
-                num_frames=num_frames,
-                frame_rate=fps,
-                images=images,
-                output_path=str(output_path),
-            )
+            if model_type == "pro" and pipeline_state.pipeline.pipeline_kind == "pro":
+                neg = negative_prompt if negative_prompt else self.config.default_negative_prompt
+                pipeline_state.pipeline.generate(  # type: ignore[call-arg]
+                    prompt=enhanced_prompt,
+                    negative_prompt=neg,
+                    seed=seed,
+                    height=height,
+                    width=width,
+                    num_frames=num_frames,
+                    frame_rate=fps,
+                    num_inference_steps=8,
+                    images=images,
+                    output_path=str(output_path),
+                )
+            else:
+                pipeline_state.pipeline.generate(  # type: ignore[call-arg]
+                    prompt=enhanced_prompt,
+                    seed=seed,
+                    height=height,
+                    width=width,
+                    num_frames=num_frames,
+                    frame_rate=fps,
+                    images=images,
+                    output_path=str(output_path),
+                )
             t_inference_end = time.perf_counter()
             logger.info("[%s] Inference: %.2fs", gen_mode, t_inference_end - t_inference_start)
 
