@@ -16,6 +16,7 @@ if TYPE_CHECKING:
         A2VPipeline,
         DepthProcessorPipeline,
         FastVideoPipeline,
+        HQVideoPipeline,
         ImageGenerationPipeline,
         IcLoraPipeline,
         PoseProcessorPipeline,
@@ -97,7 +98,7 @@ class VideoPipelineWarmth(Enum):
 
 @dataclass
 class VideoPipelineState:
-    pipeline: FastVideoPipeline | ProVideoPipeline
+    pipeline: FastVideoPipeline | ProVideoPipeline | HQVideoPipeline
     warmth: VideoPipelineWarmth
     is_compiled: bool
     lora_path: str | None = None

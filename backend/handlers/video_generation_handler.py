@@ -10,7 +10,7 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 from threading import RLock
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 from PIL import Image
 
@@ -26,7 +26,7 @@ from server_utils.media_validation import (
     validate_audio_file,
     validate_image_file,
 )
-from services.interfaces import LTXAPIClient
+from services.interfaces import LTXAPIClient, VideoPipelineModelType
 from state.app_state_types import AppState
 from state.app_settings import should_video_generate_with_ltx_api
 
@@ -97,7 +97,7 @@ class VideoGenerationHandler(StateHandlerBase):
         if audio_path:
             return self._generate_a2v(req, duration, fps, audio_path=audio_path)
 
-        model_type = req.model if req.model in ("fast", "pro") else "fast"
+        model_type: VideoPipelineModelType = req.model if req.model in ("fast", "pro", "hq") else "fast"  # type: ignore[assignment]
         logger.info("Resolution %s - using %s pipeline", resolution, model_type)
 
         RESOLUTION_MAP_16_9: dict[str, tuple[int, int]] = {
@@ -183,7 +183,7 @@ class VideoGenerationHandler(StateHandlerBase):
         lora_strength: float = 1.0,
         last_frame_image: Image.Image | None = None,
         last_frame_strength: float = 1.0,
-        model_type: str = "fast",
+        model_type: VideoPipelineModelType = "fast",
     ) -> str:
         t_total_start = time.perf_counter()
         has_any_image = image is not None or last_frame_image is not None
@@ -244,9 +244,12 @@ class VideoGenerationHandler(StateHandlerBase):
             width = round(width / 64) * 64
 
             t_inference_start = time.perf_counter()
-            if model_type == "pro" and pipeline_state.pipeline.pipeline_kind == "pro":
+            if model_type in ("pro", "hq") and pipeline_state.pipeline.pipeline_kind in ("pro", "hq"):
                 neg = negative_prompt if negative_prompt else self.config.default_negative_prompt
-                pipeline_state.pipeline.generate(  # type: ignore[call-arg]
+                steps = 15 if model_type == "hq" else 8
+                # Pro/HQ pipelines accept negative_prompt + num_inference_steps;
+                # pyright can't narrow the union via pipeline_kind, so use Any.
+                cast(Any, pipeline_state.pipeline).generate(
                     prompt=enhanced_prompt,
                     negative_prompt=neg,
                     seed=seed,
@@ -254,7 +257,7 @@ class VideoGenerationHandler(StateHandlerBase):
                     width=width,
                     num_frames=num_frames,
                     frame_rate=fps,
-                    num_inference_steps=8,
+                    num_inference_steps=steps,
                     images=images,
                     output_path=str(output_path),
                 )

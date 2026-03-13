@@ -26,6 +26,7 @@ from services.interfaces import (
     A2VPipeline,
     DepthProcessorPipeline,
     FastVideoPipeline,
+    HQVideoPipeline,
     ZitAPIClient,
     ImageGenerationPipeline,
     GpuCleaner,
@@ -68,6 +69,7 @@ class AppHandler:
         a2v_pipeline_class: type[A2VPipeline],
         retake_pipeline_class: type[RetakePipeline],
         pro_video_pipeline_class: type[ProVideoPipeline],
+        hq_video_pipeline_class: type[HQVideoPipeline],
     ) -> None:
         self.config = config
 
@@ -82,6 +84,7 @@ class AppHandler:
         self.zit_api_client = zit_api_client
         self.fast_video_pipeline_class = fast_video_pipeline_class
         self.pro_video_pipeline_class = pro_video_pipeline_class
+        self.hq_video_pipeline_class = hq_video_pipeline_class
         self.image_generation_pipeline_class = image_generation_pipeline_class
         self.ic_lora_pipeline_class = ic_lora_pipeline_class
         self.depth_processor_pipeline_class = depth_processor_pipeline_class
@@ -158,6 +161,7 @@ class AppHandler:
             a2v_pipeline_class=a2v_pipeline_class,
             retake_pipeline_class=retake_pipeline_class,
             pro_video_pipeline_class=pro_video_pipeline_class,
+            hq_video_pipeline_class=hq_video_pipeline_class,
             config=config,
         )
 
@@ -243,11 +247,13 @@ class ServiceBundle:
     a2v_pipeline_class: type[A2VPipeline]
     retake_pipeline_class: type[RetakePipeline]
     pro_video_pipeline_class: type[ProVideoPipeline]
+    hq_video_pipeline_class: type[HQVideoPipeline]
 
 
 def build_default_service_bundle(config: RuntimeConfig) -> ServiceBundle:
     """Build real runtime services with lazy heavy imports isolated from tests."""
     from services.fast_video_pipeline.ltx_fast_video_pipeline import LTXFastVideoPipeline
+    from services.hq_video_pipeline.ltx_hq_video_pipeline import LTXHQVideoPipeline
     from services.pro_video_pipeline.ltx_pro_video_pipeline import LTXProVideoPipeline
     from services.zit_api_client.zit_api_client_impl import ZitAPIClientImpl
     from services.gpu_cleaner.torch_cleaner import TorchCleaner
@@ -289,6 +295,7 @@ def build_default_service_bundle(config: RuntimeConfig) -> ServiceBundle:
         a2v_pipeline_class=LTXa2vPipeline,
         retake_pipeline_class=LTXRetakePipeline,
         pro_video_pipeline_class=LTXProVideoPipeline,
+        hq_video_pipeline_class=LTXHQVideoPipeline,
     )
 
 
@@ -319,4 +326,5 @@ def build_initial_state(
         a2v_pipeline_class=bundle.a2v_pipeline_class,
         retake_pipeline_class=bundle.retake_pipeline_class,
         pro_video_pipeline_class=bundle.pro_video_pipeline_class,
+        hq_video_pipeline_class=bundle.hq_video_pipeline_class,
     )

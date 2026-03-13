@@ -1,19 +1,45 @@
-"""LTX Pro video pipeline wrapper (two-stage with CFG guidance)."""
+"""LTX HQ video pipeline wrapper (two-stage with Res2s sampler)."""
 
 from __future__ import annotations
 
 from collections.abc import Iterator
-from typing import Final, cast
+from typing import TYPE_CHECKING, Final, cast
 
 import torch
 
+if TYPE_CHECKING:
+    from ltx_core.components.guiders import MultiModalGuiderParams
+
 from api_types import ImageConditioningInput
-from services.ltx_pipeline_common import default_guiders, default_tiling_config, encode_video_output, video_chunks_number
+from services.ltx_pipeline_common import default_tiling_config, encode_video_output, video_chunks_number
 from services.services_utils import AudioOrNone, TilingConfigType, device_supports_fp8
 
 
-class LTXProVideoPipeline:
-    pipeline_kind: Final = "pro"
+# HQ-specific guider params from LTX_2_3_HQ_PARAMS
+def _hq_guiders() -> tuple[MultiModalGuiderParams, MultiModalGuiderParams]:
+    from ltx_core.components.guiders import MultiModalGuiderParams
+
+    video = MultiModalGuiderParams(
+        cfg_scale=3.0,
+        stg_scale=0.0,
+        rescale_scale=0.45,
+        modality_scale=3.0,
+        skip_step=0,
+        stg_blocks=[],
+    )
+    audio = MultiModalGuiderParams(
+        cfg_scale=7.0,
+        stg_scale=0.0,
+        rescale_scale=1.0,
+        modality_scale=3.0,
+        skip_step=0,
+        stg_blocks=[],
+    )
+    return video, audio
+
+
+class LTXHQVideoPipeline:
+    pipeline_kind: Final = "hq"
 
     @staticmethod
     def create(
@@ -23,8 +49,8 @@ class LTXProVideoPipeline:
         distilled_lora_path: str,
         device: torch.device,
         loras: list[object] | None = None,
-    ) -> "LTXProVideoPipeline":
-        return LTXProVideoPipeline(
+    ) -> "LTXHQVideoPipeline":
+        return LTXHQVideoPipeline(
             checkpoint_path=checkpoint_path,
             gemma_root=gemma_root,
             upsampler_path=upsampler_path,
@@ -45,7 +71,7 @@ class LTXProVideoPipeline:
         from ltx_core.loader.primitives import LoraPathStrengthAndSDOps
         from ltx_core.loader.sd_ops import LTXV_LORA_COMFY_RENAMING_MAP
         from ltx_core.quantization import QuantizationPolicy
-        from ltx_pipelines.ti2vid_two_stages import TI2VidTwoStagesPipeline
+        from ltx_pipelines.ti2vid_two_stages_res2s import TI2VidTwoStagesRes2sPipeline
 
         distilled_lora = [
             LoraPathStrengthAndSDOps(
@@ -58,13 +84,13 @@ class LTXProVideoPipeline:
         if loras is not None:
             resolved_loras = loras  # type: ignore[assignment]
 
-        self.pipeline = TI2VidTwoStagesPipeline(
+        self.pipeline = TI2VidTwoStagesRes2sPipeline(
             checkpoint_path=checkpoint_path,
             distilled_lora=distilled_lora,
             spatial_upsampler_path=upsampler_path,
             gemma_root=cast(str, gemma_root),
             loras=resolved_loras,
-            device=device,
+            device=str(device),
             quantization=QuantizationPolicy.fp8_cast() if device_supports_fp8(device) else None,
         )
 
@@ -83,7 +109,7 @@ class LTXProVideoPipeline:
     ) -> tuple[torch.Tensor | Iterator[torch.Tensor], AudioOrNone]:
         from ltx_pipelines.utils.args import ImageConditioningInput as _LtxImageInput
 
-        video_guider, audio_guider = default_guiders()
+        video_guider, audio_guider = _hq_guiders()
 
         return self.pipeline(
             prompt=prompt,

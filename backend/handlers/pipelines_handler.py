@@ -13,6 +13,7 @@ from services.interfaces import (
     A2VPipeline,
     DepthProcessorPipeline,
     FastVideoPipeline,
+    HQVideoPipeline,
     ImageGenerationPipeline,
     GpuCleaner,
     IcLoraPipeline,
@@ -56,6 +57,7 @@ class PipelinesHandler(StateHandlerBase):
         a2v_pipeline_class: type[A2VPipeline],
         retake_pipeline_class: type[RetakePipeline],
         pro_video_pipeline_class: type[ProVideoPipeline],
+        hq_video_pipeline_class: type[HQVideoPipeline],
         config: RuntimeConfig,
     ) -> None:
         super().__init__(state, lock, config)
@@ -63,6 +65,7 @@ class PipelinesHandler(StateHandlerBase):
         self._gpu_cleaner = gpu_cleaner
         self._fast_video_pipeline_class = fast_video_pipeline_class
         self._pro_video_pipeline_class = pro_video_pipeline_class
+        self._hq_video_pipeline_class = hq_video_pipeline_class
         self._image_generation_pipeline_class = image_generation_pipeline_class
         self._ic_lora_pipeline_class = ic_lora_pipeline_class
         self._depth_processor_pipeline_class = depth_processor_pipeline_class
@@ -128,7 +131,7 @@ class PipelinesHandler(StateHandlerBase):
     ) -> VideoPipelineState:
         gemma_root = self._text_handler.resolve_gemma_root()
 
-        checkpoint_path = str(resolve_model_path(self.models_dir, self.config.model_download_specs, "full_checkpoint" if model_type == "pro" else "checkpoint"))
+        checkpoint_path = str(resolve_model_path(self.models_dir, self.config.model_download_specs, "full_checkpoint" if model_type in ("pro", "hq") else "checkpoint"))
         upsampler_path = str(resolve_model_path(self.models_dir, self.config.model_download_specs,"upsampler"))
 
         loras: list[object] = []
@@ -138,16 +141,26 @@ class PipelinesHandler(StateHandlerBase):
 
             loras = [LoraPathStrengthAndSDOps(path=lora_path, strength=lora_strength, sd_ops=LTXV_LORA_COMFY_RENAMING_MAP)]
 
-        if model_type == "pro":
+        if model_type in ("pro", "hq"):
             distilled_lora_path = str(resolve_model_path(self.models_dir, self.config.model_download_specs, "distilled_lora"))
-            pipeline = self._pro_video_pipeline_class.create(
-                checkpoint_path,
-                gemma_root,
-                upsampler_path,
-                distilled_lora_path,
-                self.config.device,
-                loras=loras if loras else None,
-            )
+            if model_type == "hq":
+                pipeline = self._hq_video_pipeline_class.create(
+                    checkpoint_path,
+                    gemma_root,
+                    upsampler_path,
+                    distilled_lora_path,
+                    self.config.device,
+                    loras=loras if loras else None,
+                )
+            else:
+                pipeline = self._pro_video_pipeline_class.create(
+                    checkpoint_path,
+                    gemma_root,
+                    upsampler_path,
+                    distilled_lora_path,
+                    self.config.device,
+                    loras=loras if loras else None,
+                )
         else:
             pipeline = self._fast_video_pipeline_class.create(
                 checkpoint_path,

@@ -11,7 +11,7 @@ import {
 import { backendFetch } from '../lib/backend'
 
 export interface GenerationSettings {
-  model: 'fast' | 'pro'
+  model: 'fast' | 'pro' | 'hq'
   duration: number
   videoResolution: string
   fps: number

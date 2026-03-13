@@ -1,4 +1,4 @@
-"""Pro video pipeline protocol definitions."""
+"""HQ video pipeline protocol definitions."""
 
 from __future__ import annotations
 
@@ -10,8 +10,8 @@ if TYPE_CHECKING:
     import torch
 
 
-class ProVideoPipeline(Protocol):
-    pipeline_kind: ClassVar[Literal["pro"]]
+class HQVideoPipeline(Protocol):
+    pipeline_kind: ClassVar[Literal["hq"]]
 
     @staticmethod
     def create(
@@ -21,7 +21,7 @@ class ProVideoPipeline(Protocol):
         distilled_lora_path: str,
         device: torch.device,
         loras: list[object] | None = None,
-    ) -> "ProVideoPipeline":
+    ) -> "HQVideoPipeline":
         ...
 
     def generate(
