@@ -25,7 +25,7 @@ interface GenerationProgress {
 }
 
 interface UseGenerationReturn extends GenerationState {
-  generate: (prompt: string, imagePath: string | null, settings: GenerationSettings, audioPath?: string | null) => Promise<void>
+  generate: (prompt: string, imagePath: string | null, settings: GenerationSettings, audioPath?: string | null, lastFrameImagePath?: string | null) => Promise<void>
   generateImage: (prompt: string, settings: GenerationSettings) => Promise<void>
   cancel: () => void
   reset: () => void
@@ -111,6 +111,7 @@ export function useGeneration(): UseGenerationReturn {
     imagePath: string | null,
     settings: GenerationSettings,
     audioPath?: string | null,
+    lastFrameImagePath?: string | null,
   ) => {
     const statusMsg = settings.model === 'pro'
       ? 'Loading Pro model & generating...'
@@ -155,6 +156,9 @@ export function useGeneration(): UseGenerationReturn {
       if (settings.loraPath) {
         body.loraPath = settings.loraPath
         body.loraStrength = settings.loraStrength ?? 1.0
+      }
+      if (lastFrameImagePath) {
+        body.lastFrameImagePath = lastFrameImagePath
       }
 
       // Poll for real progress from backend with time-based interpolation

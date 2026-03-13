@@ -328,6 +328,8 @@ function PromptBar({
   isGenerating,
   inputImage,
   onInputImageChange,
+  inputLastFrameImage,
+  onInputLastFrameImageChange,
   inputAudio,
   onInputAudioChange,
   settings,
@@ -353,6 +355,8 @@ function PromptBar({
   buttonIcon: React.ReactNode
   inputImage: string | null
   onInputImageChange: (url: string | null) => void
+  inputLastFrameImage: string | null
+  onInputLastFrameImageChange: (url: string | null) => void
   inputAudio: string | null
   onInputAudioChange: (url: string | null) => void
   settings: {
@@ -374,8 +378,10 @@ function PromptBar({
   onIcLoraStrengthChange?: (strength: number) => void
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
+  const lastFrameInputRef = useRef<HTMLInputElement>(null)
   const audioInputRef = useRef<HTMLInputElement>(null)
   const [isDragOver, setIsDragOver] = useState(false)
+  const [isLastFrameDragOver, setIsLastFrameDragOver] = useState(false)
   const [isAudioDragOver, setIsAudioDragOver] = useState(false)
   const isRetake = mode === 'retake'
   const isIcLora = mode === 'ic-lora'
@@ -398,6 +404,34 @@ function PromptBar({
       const asset = JSON.parse(assetData) as Asset
       if (asset.type === 'image') {
         onInputImageChange(asset.url)
+      }
+    }
+  }
+
+  const handleLastFrameDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsLastFrameDragOver(false)
+
+    const assetData = e.dataTransfer.getData('asset')
+    if (assetData) {
+      const asset = JSON.parse(assetData) as Asset
+      if (asset.type === 'image') {
+        onInputLastFrameImageChange(asset.url)
+      }
+    }
+  }
+
+  const handleLastFrameFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file && file.type.startsWith('image/')) {
+      const filePath = (file as any).path as string | undefined
+      if (filePath) {
+        const normalized = filePath.replace(/\\/g, '/')
+        const fileUrl = normalized.startsWith('/') ? `file://${normalized}` : `file:///${normalized}`
+        onInputLastFrameImageChange(fileUrl)
+      } else {
+        const url = URL.createObjectURL(file)
+        onInputLastFrameImageChange(url)
       }
     }
   }
@@ -497,6 +531,41 @@ function PromptBar({
               type="file"
               accept="image/*"
               onChange={handleFileSelect}
+              className="hidden"
+            />
+          </div>
+        )}
+
+        {/* Last frame image drop zone — video mode only (FLF) */}
+        {mode === 'video' && !isRetake && !isIcLora && (
+          <div
+            className={`relative w-10 h-10 mx-1 mt-2 rounded-lg border-2 border-dashed transition-colors flex items-center justify-center flex-shrink-0 cursor-pointer ${
+              isLastFrameDragOver ? 'border-purple-500 bg-purple-500/10' : inputLastFrameImage ? 'border-purple-600' : 'border-zinc-700 hover:border-zinc-500'
+            }`}
+            onDragOver={(e) => { e.preventDefault(); setIsLastFrameDragOver(true) }}
+            onDragLeave={() => setIsLastFrameDragOver(false)}
+            onDrop={handleLastFrameDrop}
+            onClick={() => lastFrameInputRef.current?.click()}
+            title={inputLastFrameImage ? 'Last frame image — click to change' : 'Attach last frame image (optional)'}
+          >
+            {inputLastFrameImage ? (
+              <>
+                <img src={inputLastFrameImage} alt="" className="w-full h-full object-cover rounded-md" />
+                <button
+                  onClick={(e) => { e.stopPropagation(); onInputLastFrameImageChange(null) }}
+                  className="absolute -top-1 -right-1 p-0.5 rounded-full bg-zinc-800 text-zinc-400 hover:text-white z-10"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </>
+            ) : (
+              <Film className="h-4 w-4 text-zinc-500" />
+            )}
+            <input
+              ref={lastFrameInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleLastFrameFileSelect}
               className="hidden"
             />
           </div>
@@ -886,6 +955,7 @@ export function GenSpace() {
   const [mode, setMode] = useState<'image' | 'video' | 'retake' | 'ic-lora'>('video')
   const [prompt, setPrompt] = useState('')
   const [inputImage, setInputImage] = useState<string | null>(null)
+  const [inputLastFrameImage, setInputLastFrameImage] = useState<string | null>(null)
   const [inputAudio, setInputAudio] = useState<string | null>(null)
   const [localError, setLocalError] = useState<string | null>(null)
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null)
@@ -1364,6 +1434,7 @@ export function GenSpace() {
       // Extract filesystem path from the file:// URL for the backend
       const imagePath = inputImage ? fileUrlToPath(inputImage) : null
       const audioPath = inputAudio ? fileUrlToPath(inputAudio) : null
+      const lastFrameImagePath = inputLastFrameImage ? fileUrlToPath(inputLastFrameImage) : null
       const videoSettings = applyForcedVideoSettings(settings)
       if (audioPath) videoSettings.model = 'pro'
 
@@ -1386,6 +1457,7 @@ export function GenSpace() {
           loraStrength: videoSettings.loraStrength ?? 1.0,
         },
         audioPath,
+        lastFrameImagePath,
       )
     }
   }
@@ -1680,6 +1752,8 @@ export function GenSpace() {
           buttonIcon={promptButtonIcon}
           inputImage={inputImage}
           onInputImageChange={setInputImage}
+          inputLastFrameImage={inputLastFrameImage}
+          onInputLastFrameImageChange={setInputLastFrameImage}
           inputAudio={inputAudio}
           onInputAudioChange={setInputAudio}
           settings={settings}

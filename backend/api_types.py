@@ -237,6 +237,8 @@ class GenerateVideoRequest(BaseModel):
     fps: str = "24"
     audio: str = "false"
     imagePath: str | None = None
+    lastFrameImagePath: str | None = None
+    lastFrameStrength: float = 1.0
     audioPath: str | None = None
     aspectRatio: Literal["16:9", "9:16"] = "16:9"
     loraPath: str | None = None

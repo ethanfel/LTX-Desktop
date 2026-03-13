@@ -46,6 +46,7 @@ export function Playground() {
   const [mode, setMode] = useState<GenerationMode>('text-to-video')
   const [prompt, setPrompt] = useState('')
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
+  const [selectedLastFrameImage, setSelectedLastFrameImage] = useState<string | null>(null)
   const [selectedAudio, setSelectedAudio] = useState<string | null>(null)
   const [settings, setSettings] = useState<GenerationSettings>(() => ({ ...DEFAULT_SETTINGS }))
 
@@ -171,8 +172,9 @@ export function Playground() {
       if (!prompt.trim()) return
       const imagePath = selectedImage ? fileUrlToPath(selectedImage) : null
       const audioPath = selectedAudio ? fileUrlToPath(selectedAudio) : null
+      const lastFrameImagePath = selectedLastFrameImage ? fileUrlToPath(selectedLastFrameImage) : null
       if (audioPath) effectiveVideoSettings.model = 'pro'
-      generate(prompt, imagePath, effectiveVideoSettings, audioPath)
+      generate(prompt, imagePath, effectiveVideoSettings, audioPath, lastFrameImagePath)
     }
   }
   
@@ -192,6 +194,7 @@ export function Playground() {
   const handleClearAll = () => {
     setPrompt('')
     setSelectedImage(null)
+    setSelectedLastFrameImage(null)
     setSelectedAudio(null)
     const baseDefaults = { ...DEFAULT_SETTINGS }
     const shouldSanitizeVideoSettings = shouldVideoGenerateWithLtxApi && mode !== 'text-to-image'
@@ -284,6 +287,12 @@ export function Playground() {
                 <ImageUploader
                   selectedImage={selectedImage}
                   onImageSelect={setSelectedImage}
+                  label="First Frame (optional)"
+                />
+                <ImageUploader
+                  selectedImage={selectedLastFrameImage}
+                  onImageSelect={setSelectedLastFrameImage}
+                  label="Last Frame (optional)"
                 />
                 <AudioUploader
                   selectedAudio={selectedAudio}
