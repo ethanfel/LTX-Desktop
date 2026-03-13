@@ -26,6 +26,8 @@ export interface UseGapGenerationParams {
   regenCancel: () => void
   regenReset: () => void
   regenError: string | null
+  regenSetResult: (videoPath: string, videoUrl: string) => void
+  regenSetGenerating: (message?: string) => void
   projectId: string
 }
 
@@ -49,6 +51,8 @@ export function useGapGeneration({
   regenCancel,
   regenReset,
   regenError,
+  regenSetResult,
+  regenSetGenerating,
   projectId,
 }: UseGapGenerationParams) {
   // Gap selection and generation
@@ -92,6 +96,8 @@ export function useGapGeneration({
   const [gapSuggestionError, setGapSuggestionError] = useState(false)
   const [gapSuggestionNoApiKey, setGapSuggestionNoApiKey] = useState(false)
   const gapSuggestionAbortRef = useRef<AbortController | null>(null)
+  // Abort controller for in-flight blend requests (for cancellation)
+  const blendAbortRef = useRef<AbortController | null>(null)
   // Frames extracted from neighboring clips for the gap animation header
   const [gapBeforeFrame, setGapBeforeFrame] = useState<string | null>(null)
   const [gapAfterFrame, setGapAfterFrame] = useState<string | null>(null)
@@ -224,11 +230,77 @@ export function useGapGeneration({
     try {
       if (mode === 'text-to-image') {
         await regenGenerateImage(finalPrompt, settings)
-      } else if (mode === 'blend') {
-        // Blend mode: use before frame as first frame, after frame as last frame
-        const imagePath = gapBeforeFramePath || null
-        const lastFramePath = gapAfterFramePath || null
-        await regenGenerate(finalPrompt, imagePath, settings, null, lastFramePath)
+      } else if (mode === 'blend' && blendInfo) {
+        // Blend mode: use retake pipeline for full video context
+        const origA = blendInfo.originals.get(blendInfo.clipAId)
+        const origB = blendInfo.originals.get(blendInfo.clipBId)
+        const srcA = origA ? resolveClipSrc(origA) : null
+        const srcB = origB ? resolveClipSrc(origB) : null
+        const pathA = srcA ? fileUrlToPath(srcA) : null
+        const pathB = srcB ? fileUrlToPath(srcB) : null
+
+        if (pathA && pathB && origA && origB) {
+          // Compute seek positions in the source video files
+          const seekEndA = origA.trimStart + origA.duration * origA.speed
+          const seekStartB = origB.trimStart
+          const contextDuration = Math.min(2, origA.duration * origA.speed * 0.5, origB.duration * origB.speed * 0.5)
+
+          // Signal that generation is in progress so the placement effect waits
+          regenSetGenerating('Blending clips...')
+
+          // Set up abort controller for cancellation and progress polling
+          const blendAbort = new AbortController()
+          blendAbortRef.current = blendAbort
+          const progressInterval = setInterval(async () => {
+            try {
+              const res = await backendFetch('/api/generation/progress')
+              if (res.ok) {
+                const prog = await res.json()
+                if (prog.phase === 'inference') {
+                  regenSetGenerating(`Blending... ${prog.progress}%`)
+                }
+              }
+            } catch { /* ignore */ }
+          }, 500)
+
+          try {
+            const response = await backendFetch('/api/blend', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                video_path_a: pathA,
+                seek_end_a: seekEndA,
+                context_a: contextDuration,
+                video_path_b: pathB,
+                seek_start_b: seekStartB,
+                context_b: contextDuration,
+                gap_duration: gapDuration,
+                fps: settings.fps,
+                prompt: finalPrompt,
+                distilled: true,
+              }),
+              signal: blendAbort.signal,
+            })
+
+            const data = await response.json()
+            if (!response.ok || data.status !== 'complete' || !data.video_path) {
+              throw new Error(data.error || data.detail || 'Blend generation failed')
+            }
+
+            // Convert path to file:// URL and set result for the placement effect
+            const pathNormalized = data.video_path.replace(/\\/g, '/')
+            const videoUrl = pathNormalized.startsWith('/') ? `file://${pathNormalized}` : `file:///${pathNormalized}`
+            regenSetResult(data.video_path, videoUrl)
+          } finally {
+            clearInterval(progressInterval)
+            blendAbortRef.current = null
+          }
+        } else {
+          // Fallback to i2v blend if we can't resolve video paths
+          const imagePath = gapBeforeFramePath || null
+          const lastFramePath = gapAfterFramePath || null
+          await regenGenerate(finalPrompt, imagePath, settings, null, lastFramePath)
+        }
       } else if (mode === 'extend') {
         // Extend mode: use before frame as first frame conditioning only
         const imagePath = gapBeforeFramePath || null
@@ -255,25 +327,32 @@ export function useGapGeneration({
       }
     } catch (err) {
       console.error('Gap generation failed:', err)
+      regenReset()
       setGeneratingGap(null)
     }
-  }, [selectedGap, gapGenerateMode, gapPrompt, gapSettings, gapImageFile, gapApplyAudioToTrack, currentProjectId, regenGenerate, regenGenerateImage, gapBeforeFramePath, gapAfterFramePath])
+  }, [selectedGap, gapGenerateMode, gapPrompt, gapSettings, gapImageFile, gapApplyAudioToTrack, currentProjectId, regenGenerate, regenGenerateImage, regenSetResult, regenSetGenerating, regenReset, gapBeforeFramePath, gapAfterFramePath, blendInfo, resolveClipSrc])
 
   // When generation completes, place the result in the gap
+  const placementInFlightRef = useRef(false)
   useEffect(() => {
     if (!generatingGap || isRegenerating) return
-    
+
     const isImageResult = generatingGap.mode === 'text-to-image'
     const origUrl = isImageResult ? regenImageUrl : regenVideoUrl
     const origPath = isImageResult ? regenImagePath : regenVideoPath
     if (!origUrl || !currentProjectId) {
       // Generation ended with no result (cancelled or failed) - clean up
       if (!isRegenerating && generatingGap) {
+        placementInFlightRef.current = false
         setGeneratingGap(null)
         if (!regenError) regenReset()
       }
       return
     }
+
+    // Prevent duplicate placement from rapid re-renders
+    if (placementInFlightRef.current) return
+    placementInFlightRef.current = true
 
     const gap = generatingGap
     const gapDuration = gap.endTime - gap.startTime
@@ -387,14 +466,15 @@ export function useGapGeneration({
       }
       
       setClips(prev => [...prev, ...newClips])
-      
+
       // Clean up generating state
       setGeneratingGap(null)
       setGapPrompt('')
       setGapImageFile(null)
+      placementInFlightRef.current = false
       regenReset()
     })()
-    
+
   }, [regenVideoUrl, regenImageUrl, isRegenerating, generatingGap, regenError])
 
   // --- Gap context-aware prompt suggestion ---
@@ -618,6 +698,11 @@ export function useGapGeneration({
 
   // Cancel an in-progress gap generation
   const cancelGapGeneration = useCallback(() => {
+    // Abort blend fetch if in progress
+    blendAbortRef.current?.abort()
+    blendAbortRef.current = null
+    // Also cancel on backend side
+    backendFetch('/api/generate/cancel', { method: 'POST' }).catch(() => {})
     regenCancel()
     regenReset()
     setGeneratingGap(null)

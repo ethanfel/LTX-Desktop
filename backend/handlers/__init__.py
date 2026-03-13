@@ -12,6 +12,7 @@ from handlers.retake_handler import RetakeHandler
 from handlers.runtime_policy_handler import RuntimePolicyHandler
 from handlers.settings_handler import SettingsHandler
 from handlers.text_handler import TextHandler
+from handlers.blend_handler import BlendHandler
 from handlers.video_generation_handler import VideoGenerationHandler
 
 __all__ = [
@@ -26,6 +27,7 @@ __all__ = [
     "HealthHandler",
     "SuggestGapPromptHandler",
     "RetakeHandler",
+    "BlendHandler",
     "RuntimePolicyHandler",
     "IcLoraHandler",
 ]

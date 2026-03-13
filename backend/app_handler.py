@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 from state.app_settings import AppSettings
 from handlers import (
+    BlendHandler,
     DownloadHandler,
     GenerationHandler,
     HealthHandler,
@@ -208,6 +209,15 @@ class AppHandler:
             state=self.state,
             lock=self._lock,
             ltx_api_client=ltx_api_client,
+            config=config,
+            generation_handler=self.generation,
+            pipelines_handler=self.pipelines,
+            text_handler=self.text,
+        )
+
+        self.blend = BlendHandler(
+            state=self.state,
+            lock=self._lock,
             config=config,
             generation_handler=self.generation,
             pipelines_handler=self.pipelines,

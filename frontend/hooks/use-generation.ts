@@ -29,6 +29,8 @@ interface UseGenerationReturn extends GenerationState {
   generateImage: (prompt: string, settings: GenerationSettings) => Promise<void>
   cancel: () => void
   reset: () => void
+  setResult: (videoPath: string, videoUrl: string) => void
+  setGenerating: (message?: string) => void
 }
 
 const IMAGE_SHORT_SIDE_BY_RESOLUTION: Record<string, number> = {
@@ -477,11 +479,43 @@ export function useGeneration(): UseGenerationReturn {
     })
   }, [])
 
+  const setGenerating = useCallback((message?: string) => {
+    setState({
+      isGenerating: true,
+      progress: 0,
+      statusMessage: message || 'Generating...',
+      videoUrl: null,
+      videoPath: null,
+      imageUrl: null,
+      imagePath: null,
+      imageUrls: [],
+      imagePaths: [],
+      error: null,
+    })
+  }, [])
+
+  const setResult = useCallback((videoPath: string, videoUrl: string) => {
+    setState({
+      isGenerating: false,
+      progress: 100,
+      statusMessage: 'Complete!',
+      videoUrl,
+      videoPath,
+      imageUrl: null,
+      imagePath: null,
+      imageUrls: [],
+      imagePaths: [],
+      error: null,
+    })
+  }, [])
+
   return {
     ...state,
     generate,
     generateImage,
     cancel,
     reset,
+    setResult,
+    setGenerating,
   }
 }

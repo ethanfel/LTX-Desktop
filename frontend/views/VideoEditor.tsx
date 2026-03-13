@@ -102,6 +102,8 @@ export function VideoEditor() {
     error: regenError,
     cancel: regenCancel,
     reset: regenReset,
+    setResult: regenSetResult,
+    setGenerating: regenSetGenerating,
   } = useGeneration()
   
   // Get the active timeline from context
@@ -999,6 +1001,7 @@ export function VideoEditor() {
     regenGenerate, regenGenerateImage,
     regenVideoUrl, regenVideoPath, regenImageUrl, regenImagePath,
     isRegenerating, regenProgress, regenCancel, regenReset, regenError,
+    regenSetResult, regenSetGenerating,
     projectId: currentProjectId ?? '',
   })
   deleteGapRef.current = deleteGap

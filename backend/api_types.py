@@ -285,6 +285,25 @@ class RetakeRequest(BaseModel):
     distilled: bool = True
 
 
+class BlendRequest(BaseModel):
+    """AI Blend: compose a temporary video from two clips and retake the gap."""
+    video_path_a: str       # Source video file for clip A
+    seek_end_a: float       # Time in clip A's video at the cut point (seconds)
+    context_a: float        # Seconds of context to include from clip A before the cut
+    video_path_b: str       # Source video file for clip B
+    seek_start_b: float     # Time in clip B's video at the cut point (seconds)
+    context_b: float        # Seconds of context to include from clip B after the cut
+    gap_duration: float     # Duration of the gap to regenerate (seconds)
+    fps: int = 24
+    prompt: str = ""
+    distilled: bool = True
+
+
+class BlendResponse(BaseModel):
+    status: str
+    video_path: str | None = None
+
+
 class IcLoraExtractRequest(BaseModel):
     video_path: str
     conditioning_type: Literal["canny", "depth"] = "canny"
