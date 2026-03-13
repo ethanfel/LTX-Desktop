@@ -88,44 +88,71 @@ class SuggestGapPromptHandler(StateHandlerBase):
 
         is_image_gen = mode in ("text-to-image", "t2i")
         is_image_to_video = mode in ("image-to-video", "i2v")
-        if not is_image_to_video:
+        is_blend = mode == "blend"
+        if not is_image_to_video and not is_blend:
             input_image = None
 
-        system_text = (
-            "You are a video production assistant. The user is editing a video timeline and has a gap "
-            f"of {gap_duration:.1f} seconds between two shots. Your job is to suggest a detailed prompt "
-            f"for generating {'an image' if is_image_gen else 'a video clip'} to fill this gap, so that it flows naturally between the "
-            "preceding and following shots.\n\n"
-            "Guidelines:\n"
-            f"- Describe the scene, {'composition' if is_image_gen else 'action, camera movement'}, lighting, and mood\n"
-            "- Match the visual style and tone of the surrounding shots\n"
-            "- Create a smooth narrative or visual transition between the two shots\n"
-            "- Keep the prompt concise (2-4 sentences max)\n"
-            "- Write only the prompt text, no explanations or labels\n"
-            "- If only one neighboring shot is available, suggest something that naturally leads into or out of it\n"
-        )
+        if is_blend:
+            system_text = (
+                "You are a video production assistant. The user wants to create a seamless AI-generated "
+                f"transition of {gap_duration:.1f} seconds between two adjacent video clips. The AI model "
+                "will be conditioned on the first frame (from the end of clip A) and the last frame (from "
+                "the start of clip B), and will generate video that smoothly morphs between them.\n\n"
+                "Guidelines:\n"
+                "- Describe the continuous motion and visual transformation happening BETWEEN the two frames\n"
+                "- Focus on smooth, fluid movement — camera motion, subject motion, lighting shifts\n"
+                "- Do NOT describe two separate scenes; describe ONE continuous transition\n"
+                "- Match the visual style, color palette, and mood of both shots\n"
+                "- Keep the prompt concise (1-3 sentences)\n"
+                "- Write only the prompt text, no explanations or labels\n"
+                "- Emphasize words like 'smoothly transitions', 'gradually morphs', 'continuous motion'\n"
+            )
+        else:
+            system_text = (
+                "You are a video production assistant. The user is editing a video timeline and has a gap "
+                f"of {gap_duration:.1f} seconds between two shots. Your job is to suggest a detailed prompt "
+                f"for generating {'an image' if is_image_gen else 'a video clip'} to fill this gap, so that it flows naturally between the "
+                "preceding and following shots.\n\n"
+                "Guidelines:\n"
+                f"- Describe the scene, {'composition' if is_image_gen else 'action, camera movement'}, lighting, and mood\n"
+                "- Match the visual style and tone of the surrounding shots\n"
+                "- Create a smooth narrative or visual transition between the two shots\n"
+                "- Keep the prompt concise (2-4 sentences max)\n"
+                "- Write only the prompt text, no explanations or labels\n"
+                "- If only one neighboring shot is available, suggest something that naturally leads into or out of it\n"
+            )
 
         context_text = "Here is the context from the timeline:\n\n"
         if before_frame or before_prompt:
-            context_text += "SHOT BEFORE THE GAP:\n"
+            context_text += "SHOT BEFORE THE GAP (clip A):\n" if is_blend else "SHOT BEFORE THE GAP:\n"
             if before_prompt:
                 context_text += f"  Prompt: {before_prompt}\n"
             if before_frame:
                 context_text += "  Last frame (see image below):\n"
 
         if after_frame or after_prompt:
-            context_text += "\nSHOT AFTER THE GAP:\n"
+            context_text += "\nSHOT AFTER THE GAP (clip B):\n" if is_blend else "\nSHOT AFTER THE GAP:\n"
             if after_prompt:
                 context_text += f"  Prompt: {after_prompt}\n"
             if after_frame:
                 context_text += "  First frame (see image below):\n"
 
         context_text += f"\nGap duration: {gap_duration:.1f} seconds\n"
-        mode_label = "image generation" if is_image_gen else ("image-to-video" if is_image_to_video else "text-to-video")
+        if is_blend:
+            mode_label = "AI blend transition (first+last frame conditioned)"
+        elif is_image_gen:
+            mode_label = "image generation"
+        elif is_image_to_video:
+            mode_label = "image-to-video"
+        else:
+            mode_label = "text-to-video"
         context_text += f"Generation mode: {mode_label}\n"
         if input_image:
             context_text += "A reference image is provided to guide the start of the shot.\n"
-        context_text += "\nPlease suggest a detailed prompt for generating " + ("an image" if is_image_gen else "a video clip") + " to fill this gap."
+        if is_blend:
+            context_text += "\nPlease suggest a prompt describing the smooth visual transition between these two frames."
+        else:
+            context_text += "\nPlease suggest a detailed prompt for generating " + ("an image" if is_image_gen else "a video clip") + " to fill this gap."
 
         user_parts: list[JSONValue] = [{"text": context_text}]
 
