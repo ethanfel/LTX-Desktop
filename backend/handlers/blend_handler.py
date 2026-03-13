@@ -254,9 +254,9 @@ class BlendHandler(StateHandlerBase):
         scale = SpatioTemporalScaleFactors.default()
         if (num_frames - 1) % scale.time != 0:
             snapped = ((num_frames - 1) // scale.time) * scale.time + 1
-            logger.warning(
-                "Composite frame count %d not 8k+1; expected %d",
-                num_frames, snapped,
+            raise HTTPError(
+                400,
+                f"Composite frame count must satisfy 8k+1. Got {num_frames}; expected {snapped}.",
             )
         if width % 32 != 0 or height % 32 != 0:
             raise HTTPError(
