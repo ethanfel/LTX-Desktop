@@ -23,8 +23,8 @@ COPY public/ public/
 # Desktop defaults are conservative for consumer cards (1080p→5s, 720p→10s).
 # This patch uses regex to survive upstream value changes; fails loudly if
 # the pattern disappears (meaning upstream refactored and we need to adapt).
-COPY web/patch-duration-limits.sh /tmp/patch-duration-limits.sh
-RUN bash /tmp/patch-duration-limits.sh frontend/views/GenSpace.tsx frontend/components/SettingsPanel.tsx
+COPY web/patch-generation-limits.sh /tmp/patch-generation-limits.sh
+RUN bash /tmp/patch-generation-limits.sh frontend/views/GenSpace.tsx frontend/components/SettingsPanel.tsx
 RUN pnpm build:frontend
 
 # ── Stage 2: Runtime ─────────────────────────────────────────────────────────
