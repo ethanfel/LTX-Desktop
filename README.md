@@ -135,6 +135,63 @@ graph TD
   BE --> DATA
 ```
 
+## Docker (Web UI)
+
+Run LTX Desktop in a Docker container with GPU passthrough — no Electron or desktop environment needed. The full UI is served directly in your browser.
+
+```bash
+docker run -d --gpus all --shm-size=8g \
+  -p 6080:6080 \
+  -v /path/to/data:/data \
+  ghcr.io/ethanfel/ltx-desktop:latest
+```
+
+Then open **http://localhost:6080** in your browser.
+
+### Requirements
+
+- NVIDIA GPU with CUDA support
+- Docker with [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)
+- Disk space for models and outputs (15 GB minimum, 50+ GB typical)
+
+### How it works
+
+The container runs two processes: **nginx** serves the React frontend on port 6080 and proxies API/WebSocket requests to the **Python backend** (FastAPI) on port 8000. An [electronAPI shim](web/electronapi-shim.js) replaces Electron IPC calls with browser-native equivalents so the unmodified frontend works in any modern browser.
+
+### Persistent storage
+
+All data lives under the single `/data` volume:
+
+| Directory | Contents |
+|-----------|----------|
+| `LTXDesktop/models/` | Downloaded AI models (can re-download from UI) |
+| `LTXDesktop/outputs/` | Generated videos and images |
+| `LTXDesktop/settings.json` | App preferences |
+| `project-assets/` | Media used in projects |
+| `uploads/` | Uploaded source files |
+| `downloads/` | Exported files |
+
+### Docker Compose
+
+```yaml
+services:
+  ltx-desktop:
+    image: ghcr.io/ethanfel/ltx-desktop:latest
+    ports:
+      - "6080:6080"
+    volumes:
+      - ./ltx-data:/data
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+    shm_size: 8g
+    restart: unless-stopped
+```
+
+For Unraid-specific setup, see the [Unraid setup guide](docs/unraid-setup-guide.md).
+
 ## Development (quickstart)
 
 Prereqs:
@@ -188,6 +245,7 @@ LTX Desktop collects minimal, anonymous usage analytics (app version, platform, 
 - [`INSTALLER.md`](docs/INSTALLER.md) — building installers
 - [`TELEMETRY.md`](docs/TELEMETRY.md) — telemetry and privacy
 - [`backend/architecture.md`](backend/architecture.md) — backend architecture
+- [Unraid setup guide](docs/unraid-setup-guide.md) — Docker on Unraid
 
 ## Contributing
 
