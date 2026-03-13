@@ -559,7 +559,7 @@ function PromptBar({
                 type="text"
                 value={settings.negativePrompt || ''}
                 onChange={(e) => onSettingsChange({ ...settings, negativePrompt: e.target.value })}
-                placeholder="Negative prompt (optional)..."
+                placeholder="Negative prompt — works with audio-to-video and quality retake only..."
                 className="w-full bg-transparent text-[11px] text-zinc-400 placeholder:text-zinc-600 focus:outline-none focus:text-zinc-300 px-0 py-0.5 border-t border-zinc-800/40"
               />
             </div>
