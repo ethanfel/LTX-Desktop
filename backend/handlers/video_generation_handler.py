@@ -218,7 +218,9 @@ class VideoGenerationHandler(StateHandlerBase):
         if last_frame_image is not None:
             temp_last_image_path = tempfile.NamedTemporaryFile(suffix=".png", delete=False).name
             last_frame_image.save(temp_last_image_path)
-            images.append(ImageConditioningInput(path=temp_last_image_path, frame_idx=num_frames - 1, strength=last_frame_strength))
+            # frame_idx is a latent frame index: convert from pixel frames via temporal scale factor (8)
+            last_latent_idx = (num_frames - 1) // 8
+            images.append(ImageConditioningInput(path=temp_last_image_path, frame_idx=last_latent_idx, strength=last_frame_strength))
 
         output_path = self._make_output_path()
 

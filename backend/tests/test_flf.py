@@ -67,7 +67,7 @@ class TestFLFGeneration:
 
         last = images[1]
         num_frames = call["num_frames"]
-        assert last.frame_idx == num_frames - 1
+        assert last.frame_idx == (num_frames - 1) // 8
         assert last.strength == 0.8
 
     def test_flf_last_frame_only(self, client, test_state, fake_services, create_fake_model_files, tmp_path):
@@ -96,7 +96,7 @@ class TestFLFGeneration:
 
         last = images[0]
         num_frames = call["num_frames"]
-        assert last.frame_idx == num_frames - 1
+        assert last.frame_idx == (num_frames - 1) // 8
         assert last.strength == 1.0  # default strength
 
     def test_flf_default_strength(self, client, test_state, fake_services, create_fake_model_files, tmp_path):
