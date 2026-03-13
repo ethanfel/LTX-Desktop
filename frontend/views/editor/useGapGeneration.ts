@@ -450,8 +450,8 @@ export function useGapGeneration({
       let afterFrameUrl = ''
 
       const framePromises: Promise<void>[] = []
-      // Blend mode needs high-res frames for generation conditioning; other modes only need thumbnails for AI prompt suggestion
-      const extractWidth = mode === 'blend' ? 1280 : 512
+      // Blend mode needs full-res frames for generation conditioning; other modes only need thumbnails for AI prompt suggestion
+      const extractWidth = mode === 'blend' ? undefined : 512
 
       if (clipBefore) {
         const clipSrc = resolveClipSrc(clipBefore)
