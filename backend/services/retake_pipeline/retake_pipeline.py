@@ -58,4 +58,5 @@ class RetakePipeline(Protocol):
         regenerate_audio: bool = True,
         enhance_prompt: bool = False,
         distilled: bool = True,
+        fps_override: float | None = None,
     ) -> None: ...

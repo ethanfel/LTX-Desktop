@@ -154,6 +154,7 @@ class BlendHandler(StateHandlerBase):
                 regenerate_audio=True,
                 enhance_prompt=False,
                 distilled=req.distilled,
+                fps_override=float(fps),
             )
 
             if self._generation.is_generation_cancelled():

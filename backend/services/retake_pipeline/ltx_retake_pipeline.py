@@ -29,11 +29,15 @@ from ltx_core.quantization import QuantizationPolicy
 from ltx_core.types import Audio
 from ltx_pipelines.utils.media_io import get_videostream_metadata
 
+import logging
+
 from services.retake_pipeline.retake_pipeline import RetakePipeline
 from services.services_utils import sync_device
 
 if TYPE_CHECKING:
     from ltx_core.types import LatentState
+
+logger = logging.getLogger(__name__)
 
 
 class LTXRetakePipeline:
@@ -100,6 +104,7 @@ class LTXRetakePipeline:
         regenerate_audio: bool = True,
         enhance_prompt: bool = False,
         distilled: bool = False,
+        fps_override: float | None = None,
     ) -> tuple[Iterator[torch.Tensor], Audio]:
         from ltx_core.components.diffusion_steps import EulerDiffusionStep
         from ltx_core.components.guiders import MultiModalGuider
@@ -147,7 +152,19 @@ class LTXRetakePipeline:
 
         # --- Encode source video (tiled) ---
         video_encoder = self.model_ledger.video_encoder()
-        fps, num_pixel_frames, src_width, src_height = get_videostream_metadata(video_path)
+        metadata_fps, num_pixel_frames, src_width, src_height = get_videostream_metadata(video_path)
+        fps = fps_override if fps_override is not None else metadata_fps
+        if fps_override is not None and abs(fps_override - metadata_fps) > 0.01:
+            logger.warning(
+                "Retake fps_override=%.4f differs from metadata fps=%.4f; using override",
+                fps_override, metadata_fps,
+            )
+        logger.info(
+            "Retake _run: fps=%.4f, frames=%d, %dx%d, "
+            "start_time=%.4f, end_time=%.4f, regenerate_video=%s",
+            fps, num_pixel_frames, src_width, src_height,
+            start_time, end_time, regenerate_video,
+        )
         output_shape = VideoPixelShape(
             batch=1, frames=num_pixel_frames, width=src_width, height=src_height, fps=fps,
         )
@@ -300,6 +317,17 @@ class LTXRetakePipeline:
             device=self.device,
             initial_latent=initial_video_latent,
         )
+        # Diagnostic: log denoise_mask statistics to debug frozen blend output
+        mask = video_state.denoise_mask
+        mask_sum = mask.sum().item()
+        mask_numel = mask.numel()
+        logger.info(
+            "Retake denoise_mask: shape=%s, sum=%.0f/%.0f (%.1f%% regenerated), "
+            "min=%.4f, max=%.4f",
+            list(mask.shape), mask_sum, mask_numel,
+            100.0 * mask_sum / max(mask_numel, 1),
+            mask.min().item(), mask.max().item(),
+        )
         audio_state, audio_tools = noise_audio_state(
             output_shape=output_shape,
             noiser=noiser,
@@ -401,8 +429,10 @@ class LTXRetakePipeline:
         regenerate_audio: bool = True,
         enhance_prompt: bool = False,
         distilled: bool = True,
+        fps_override: float | None = None,
     ) -> None:
-        fps, num_frames, _, _ = get_videostream_metadata(video_path)
+        metadata_fps, num_frames, _, _ = get_videostream_metadata(video_path)
+        effective_fps = fps_override if fps_override is not None else metadata_fps
         video_iter, audio = self._run(
             video_path=video_path,
             prompt=prompt,
@@ -417,6 +447,7 @@ class LTXRetakePipeline:
             regenerate_audio=regenerate_audio,
             enhance_prompt=enhance_prompt,
             distilled=distilled,
+            fps_override=fps_override,
         )
         audio_out: Audio | None = audio
         tiling_config = TilingConfig.default()
@@ -426,7 +457,7 @@ class LTXRetakePipeline:
         encode_video_lossless(
             video=video_iter,
             audio=audio_out,
-            fps=int(fps),
+            fps=int(effective_fps),
             output_path=output_path,
             video_chunks_number_value=int(video_chunks),
         )
