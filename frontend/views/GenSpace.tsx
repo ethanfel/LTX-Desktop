@@ -540,13 +540,13 @@ function PromptBar({
         {mode === 'video' && !isRetake && !isIcLora && (
           <div
             className={`relative w-10 h-10 mx-1 mt-2 rounded-lg border-2 border-dashed transition-colors flex items-center justify-center flex-shrink-0 cursor-pointer ${
-              isLastFrameDragOver ? 'border-purple-500 bg-purple-500/10' : inputLastFrameImage ? 'border-purple-600' : 'border-zinc-700 hover:border-zinc-500'
+              isLastFrameDragOver ? 'border-blue-500 bg-blue-500/10' : 'border-zinc-700 hover:border-zinc-500'
             }`}
             onDragOver={(e) => { e.preventDefault(); setIsLastFrameDragOver(true) }}
             onDragLeave={() => setIsLastFrameDragOver(false)}
             onDrop={handleLastFrameDrop}
             onClick={() => lastFrameInputRef.current?.click()}
-            title={inputLastFrameImage ? 'Last frame image — click to change' : 'Attach last frame image (optional)'}
+            title={inputLastFrameImage ? 'Last frame — click to change' : 'Attach last frame (optional)'}
           >
             {inputLastFrameImage ? (
               <>
@@ -559,7 +559,7 @@ function PromptBar({
                 </button>
               </>
             ) : (
-              <Film className="h-4 w-4 text-zinc-500" />
+              <Image className="h-4 w-4 text-zinc-500" />
             )}
             <input
               ref={lastFrameInputRef}
