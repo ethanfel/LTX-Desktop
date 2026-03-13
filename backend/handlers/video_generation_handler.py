@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 
 from PIL import Image
 
-from api_types import GenerateVideoRequest, GenerateVideoResponse, ImageConditioningInput, VideoCameraMotion
+from api_types import GenerateVideoRequest, GenerateVideoResponse, ImageConditioningInput, LoraListResponse, VideoCameraMotion
 from _routes._errors import HTTPError
 from handlers.base import StateHandlerBase
 from handlers.generation_handler import GenerationHandler
@@ -82,6 +82,12 @@ class VideoGenerationHandler(StateHandlerBase):
         if self._generation.is_generation_running():
             raise HTTPError(409, "Generation already in progress")
 
+        # Validate LoRA path if provided
+        lora_path = req.loraPath
+        lora_strength = req.loraStrength
+        if lora_path is not None and not Path(lora_path).is_file():
+            raise HTTPError(400, f"LoRA file not found: {lora_path}")
+
         resolution = req.resolution
 
         duration = int(float(req.duration))
@@ -124,7 +130,7 @@ class VideoGenerationHandler(StateHandlerBase):
         seed = self._resolve_seed()
 
         try:
-            self._pipelines.load_gpu_pipeline("fast", should_warm=False)
+            self._pipelines.load_gpu_pipeline("fast", should_warm=False, lora_path=lora_path, lora_strength=lora_strength)
             self._generation.start_generation(generation_id)
 
             output_path = self.generate_video(
@@ -137,6 +143,8 @@ class VideoGenerationHandler(StateHandlerBase):
                 seed=seed,
                 camera_motion=req.cameraMotion,
                 negative_prompt=req.negativePrompt,
+                lora_path=lora_path,
+                lora_strength=lora_strength,
             )
 
             self._generation.complete_generation(output_path)
@@ -161,6 +169,8 @@ class VideoGenerationHandler(StateHandlerBase):
         seed: int,
         camera_motion: VideoCameraMotion,
         negative_prompt: str,
+        lora_path: str | None = None,
+        lora_strength: float = 1.0,
     ) -> str:
         t_total_start = time.perf_counter()
         gen_mode = "i2v" if image is not None else "t2v"
@@ -176,7 +186,7 @@ class VideoGenerationHandler(StateHandlerBase):
 
         self._generation.update_progress("loading_model", 5, 0, total_steps)
         t_load_start = time.perf_counter()
-        pipeline_state = self._pipelines.load_gpu_pipeline("fast", should_warm=False)
+        pipeline_state = self._pipelines.load_gpu_pipeline("fast", should_warm=False, lora_path=lora_path, lora_strength=lora_strength)
         t_load_end = time.perf_counter()
         logger.info("[%s] Pipeline load: %.2fs", gen_mode, t_load_end - t_load_start)
 
@@ -533,6 +543,20 @@ class VideoGenerationHandler(StateHandlerBase):
             return int(float(raw_value))
         except (TypeError, ValueError):
             raise HTTPError(400, error_detail) from None
+
+    def list_loras(self) -> LoraListResponse:
+        """Return .safetensors files from the models directory and its loras/ subdirectory."""
+        lora_files: list[str] = []
+        models_dir = self.models_dir
+
+        for search_dir in (models_dir, models_dir / "loras"):
+            if not search_dir.is_dir():
+                continue
+            for path in sorted(search_dir.iterdir()):
+                if path.is_file() and path.suffix == ".safetensors":
+                    lora_files.append(str(path))
+
+        return LoraListResponse(loras=lora_files)
 
     @staticmethod
     def _parse_audio_flag(audio_value: str | bool) -> bool:

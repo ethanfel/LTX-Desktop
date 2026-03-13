@@ -35,6 +35,9 @@ const DEFAULT_SETTINGS: GenerationSettings = {
   imageResolution: '1080p',
   imageAspectRatio: '16:9',
   imageSteps: 4,
+  // LoRA settings
+  loraPath: null,
+  loraStrength: 1.0,
 }
 
 export function Playground() {

@@ -858,6 +858,8 @@ const DEFAULT_VIDEO_SETTINGS = {
   variations: 1,
   audio: true,
   negativePrompt: '',
+  loraPath: null as string | null,
+  loraStrength: 1.0,
 }
 
 export function GenSpace() {
@@ -912,7 +914,7 @@ export function GenSpace() {
   } | null>(null)
   const [settings, setSettings] = useState(() => ({ ...DEFAULT_VIDEO_SETTINGS }))
   const applyForcedVideoSettings = useCallback(
-    (next: { model: string; duration: number; videoResolution: string; fps: number; audio: boolean; aspectRatio: string; imageResolution: string; variations: number; negativePrompt: string }) => {
+    (next: { model: string; duration: number; videoResolution: string; fps: number; audio: boolean; aspectRatio: string; imageResolution: string; variations: number; negativePrompt: string; loraPath: string | null; loraStrength: number }) => {
       if (!shouldVideoGenerateWithLtxApi || mode !== 'video') return next
       return sanitizeForcedApiVideoSettings(next, { hasAudio: !!inputAudio })
     },
@@ -1380,6 +1382,8 @@ export function GenSpace() {
           imageAspectRatio: videoSettings.aspectRatio,
           imageSteps: 4,
           negativePrompt: videoSettings.negativePrompt || '',
+          loraPath: videoSettings.loraPath ?? null,
+          loraStrength: videoSettings.loraStrength ?? 1.0,
         },
         audioPath,
       )

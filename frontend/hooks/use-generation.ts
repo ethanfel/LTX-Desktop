@@ -152,6 +152,10 @@ export function useGeneration(): UseGenerationReturn {
       if (audioPath) {
         body.audioPath = audioPath
       }
+      if (settings.loraPath) {
+        body.loraPath = settings.loraPath
+        body.loraStrength = settings.loraStrength ?? 1.0
+      }
 
       // Poll for real progress from backend with time-based interpolation
       let lastPhase = ''

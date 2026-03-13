@@ -19,6 +19,7 @@ class FastVideoPipeline(Protocol):
         gemma_root: str | None,
         upsampler_path: str,
         device: torch.device,
+        loras: list[object] | None = None,
     ) -> "FastVideoPipeline":
         ...
 

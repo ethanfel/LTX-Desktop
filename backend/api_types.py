@@ -185,6 +185,10 @@ class RetakeResponse(BaseModel):
     result: JsonObject | None = None
 
 
+class LoraListResponse(BaseModel):
+    loras: list[str]
+
+
 class IcLoraExtractResponse(BaseModel):
     conditioning: str
     original: str
@@ -235,6 +239,8 @@ class GenerateVideoRequest(BaseModel):
     imagePath: str | None = None
     audioPath: str | None = None
     aspectRatio: Literal["16:9", "9:16"] = "16:9"
+    loraPath: str | None = None
+    loraStrength: float = 1.0
 
 
 class GenerateImageRequest(BaseModel):

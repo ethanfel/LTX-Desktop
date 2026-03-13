@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { Select } from './ui/select'
 import type { GenerationMode } from './ModeTabs'
@@ -8,6 +8,7 @@ import {
   getAllowedForcedApiDurations,
   sanitizeForcedApiVideoSettings,
 } from '../lib/api-video-options'
+import { backendFetch } from '../lib/backend'
 
 export interface GenerationSettings {
   model: 'fast' | 'pro'
@@ -23,6 +24,8 @@ export interface GenerationSettings {
   imageSteps: number
   variations?: number  // Number of image variations to generate
   negativePrompt?: string
+  loraPath?: string | null
+  loraStrength?: number
 }
 
 interface SettingsPanelProps {
@@ -230,7 +233,12 @@ export function SettingsPanel({
       <AdvancedSection
         negativePrompt={settings.negativePrompt || ''}
         onNegativePromptChange={(value) => handleChange('negativePrompt', value)}
+        loraPath={settings.loraPath ?? null}
+        onLoraPathChange={(value) => handleChange('loraPath', value ?? '')}
+        loraStrength={settings.loraStrength ?? 1.0}
+        onLoraStrengthChange={(value) => handleChange('loraStrength', value)}
         disabled={disabled}
+        forceApiGenerations={forceApiGenerations}
       />
     </div>
   )
@@ -239,13 +247,36 @@ export function SettingsPanel({
 function AdvancedSection({
   negativePrompt,
   onNegativePromptChange,
+  loraPath,
+  onLoraPathChange,
+  loraStrength,
+  onLoraStrengthChange,
   disabled,
+  forceApiGenerations,
 }: {
   negativePrompt: string
   onNegativePromptChange: (value: string) => void
+  loraPath: string | null
+  onLoraPathChange: (value: string | null) => void
+  loraStrength: number
+  onLoraStrengthChange: (value: number) => void
   disabled?: boolean
+  forceApiGenerations?: boolean
 }) {
   const [open, setOpen] = useState(false)
+  const [availableLoras, setAvailableLoras] = useState<string[]>([])
+
+  useEffect(() => {
+    if (!open || forceApiGenerations) return
+    backendFetch('/api/loras')
+      .then(async (res) => {
+        if (res.ok) {
+          const data = await res.json()
+          setAvailableLoras(data.loras ?? [])
+        }
+      })
+      .catch(() => { /* ignore */ })
+  }, [open, forceApiGenerations])
 
   return (
     <div className="border border-zinc-800 rounded-lg overflow-hidden">
@@ -260,21 +291,65 @@ function AdvancedSection({
         />
       </button>
       {open && (
-        <div className="px-3 pb-3 space-y-1.5">
-          <label className="block text-[11px] font-medium text-zinc-500">
-            Negative Prompt
-          </label>
-          <textarea
-            value={negativePrompt}
-            onChange={(e) => onNegativePromptChange(e.target.value)}
-            placeholder="Describe what to avoid..."
-            disabled={disabled}
-            rows={2}
-            className="w-full rounded-md border border-zinc-700 bg-zinc-800 px-2.5 py-2 text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500 focus:border-zinc-500 disabled:cursor-not-allowed disabled:opacity-50 resize-y"
-          />
-          <p className="text-[10px] text-zinc-600">
-            Works with audio-to-video and quality retake modes only.
-          </p>
+        <div className="px-3 pb-3 space-y-3">
+          <div className="space-y-1.5">
+            <label className="block text-[11px] font-medium text-zinc-500">
+              Negative Prompt
+            </label>
+            <textarea
+              value={negativePrompt}
+              onChange={(e) => onNegativePromptChange(e.target.value)}
+              placeholder="Describe what to avoid..."
+              disabled={disabled}
+              rows={2}
+              className="w-full rounded-md border border-zinc-700 bg-zinc-800 px-2.5 py-2 text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500 focus:border-zinc-500 disabled:cursor-not-allowed disabled:opacity-50 resize-y"
+            />
+            <p className="text-[10px] text-zinc-600">
+              Works with audio-to-video and quality retake modes only.
+            </p>
+          </div>
+
+          {!forceApiGenerations && (
+            <>
+              <div className="space-y-1.5">
+                <label className="block text-[11px] font-medium text-zinc-500">
+                  LoRA
+                </label>
+                <select
+                  value={loraPath || ''}
+                  onChange={(e) => onLoraPathChange(e.target.value || null)}
+                  disabled={disabled}
+                  className="w-full rounded-md border border-zinc-700 bg-zinc-800 px-2.5 py-1.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-zinc-500 focus:border-zinc-500 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <option value="">None</option>
+                  {availableLoras.map((lora) => (
+                    <option key={lora} value={lora}>
+                      {lora.split('/').pop() ?? lora}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {loraPath && (
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-medium text-zinc-500">LoRA Strength</label>
+                    <span className="text-[11px] text-zinc-500">{loraStrength.toFixed(2)}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="2"
+                    step="0.05"
+                    value={loraStrength}
+                    onChange={(e) => onLoraStrengthChange(Number(e.target.value))}
+                    disabled={disabled}
+                    className="w-full accent-blue-500"
+                  />
+                </div>
+              )}
+            </>
+          )}
         </div>
       )}
     </div>

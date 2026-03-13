@@ -116,23 +116,37 @@ class PipelinesHandler(StateHandlerBase):
             logger.warning("Failed to compile transformer: %s", exc, exc_info=True)
         return state
 
-    def _create_video_pipeline(self, model_type: VideoPipelineModelType) -> VideoPipelineState:
+    def _create_video_pipeline(
+        self,
+        model_type: VideoPipelineModelType,
+        lora_path: str | None = None,
+        lora_strength: float = 1.0,
+    ) -> VideoPipelineState:
         gemma_root = self._text_handler.resolve_gemma_root()
 
         checkpoint_path = str(resolve_model_path(self.models_dir, self.config.model_download_specs,"checkpoint"))
         upsampler_path = str(resolve_model_path(self.models_dir, self.config.model_download_specs,"upsampler"))
+
+        loras: list[object] = []
+        if lora_path is not None:
+            from ltx_core.loader.primitives import LoraPathStrengthAndSDOps
+            from ltx_core.loader.sd_ops import LTXV_LORA_COMFY_RENAMING_MAP
+
+            loras = [LoraPathStrengthAndSDOps(path=lora_path, strength=lora_strength, sd_ops=LTXV_LORA_COMFY_RENAMING_MAP)]
 
         pipeline = self._fast_video_pipeline_class.create(
             checkpoint_path,
             gemma_root,
             upsampler_path,
             self.config.device,
+            loras=loras if loras else None,
         )
 
         state = VideoPipelineState(
             pipeline=pipeline,
             warmth=VideoPipelineWarmth.COLD,
             is_compiled=False,
+            lora_path=lora_path,
         )
         return self._compile_if_enabled(state)
 
@@ -245,21 +259,28 @@ class PipelinesHandler(StateHandlerBase):
         elif should_cleanup:
             self._gpu_cleaner.cleanup()
 
-    def load_gpu_pipeline(self, model_type: VideoPipelineModelType, should_warm: bool = False) -> VideoPipelineState:
+    def load_gpu_pipeline(
+        self,
+        model_type: VideoPipelineModelType,
+        should_warm: bool = False,
+        lora_path: str | None = None,
+        lora_strength: float = 1.0,
+    ) -> VideoPipelineState:
         self._install_text_patches_if_needed()
 
         state: VideoPipelineState | None = None
         with self._lock:
             if self._pipeline_matches_model_type(model_type):
                 match self.state.gpu_slot:
-                    case GpuSlot(active_pipeline=VideoPipelineState() as existing_state):
-                        state = existing_state
+                    case GpuSlot(active_pipeline=VideoPipelineState(lora_path=current_lora) as existing_state):
+                        if current_lora == lora_path:
+                            state = existing_state
                     case _:
                         pass
 
         if state is None:
             self._evict_gpu_pipeline_for_swap()
-            state = self._create_video_pipeline(model_type)
+            state = self._create_video_pipeline(model_type, lora_path=lora_path, lora_strength=lora_strength)
             with self._lock:
                 self.state.gpu_slot = GpuSlot(active_pipeline=state, generation=None)
                 self._assert_invariants()

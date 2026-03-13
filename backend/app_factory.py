@@ -18,6 +18,7 @@ from _routes.generation import router as generation_router
 from _routes.health import router as health_router
 from _routes.ic_lora import router as ic_lora_router
 from _routes.image_gen import router as image_gen_router
+from _routes.loras import router as loras_router
 from _routes.models import router as models_router
 from _routes.suggest_gap_prompt import router as suggest_gap_prompt_router
 from _routes.retake import router as retake_router
@@ -115,6 +116,7 @@ def create_app(
     app.include_router(suggest_gap_prompt_router)
     app.include_router(retake_router)
     app.include_router(ic_lora_router)
+    app.include_router(loras_router)
     app.include_router(runtime_policy_router)
 
     return app
