@@ -1575,8 +1575,16 @@ export function VideoEditor() {
     const gapStart = cutPoint - trimA
     const gapEnd = gapStart + gapDuration
     setGapImageFile(null)
-    // Default blend to pro model for better first+last frame conditioning quality
-    setGapSettings(prev => ({ ...prev, model: 'pro' }))
+    // Match blend settings to source clip quality: pro model, source resolution, no audio
+    const sourceResolution = clipA.asset?.resolution || clipB.asset?.resolution || '1080p'
+    const sourceAspectRatio = clipA.asset?.generationParams?.imageAspectRatio || clipB.asset?.generationParams?.imageAspectRatio
+    setGapSettings(prev => ({
+      ...prev,
+      model: 'pro',
+      videoResolution: sourceResolution,
+      audio: false,
+      ...(sourceAspectRatio ? { aspectRatio: sourceAspectRatio } : {}),
+    }))
     setSelectedGap({ trackIndex: clip.trackIndex, startTime: gapStart, endTime: gapEnd })
     setGapGenerateMode('blend')
   }, [clips, blendOverlap, pushUndo, setClips, setSelectedGap, setGapGenerateMode, setGapImageFile, setBlendInfo, setGapSettings])
