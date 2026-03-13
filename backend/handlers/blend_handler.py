@@ -112,7 +112,7 @@ class BlendHandler(StateHandlerBase):
             )
 
             # Step 2: Validate composite meets retake constraints
-            self._validate_composite(composite_path)
+            self._validate_composite(composite_path, expected_fps=fps)
             logger.info(
                 "Blend timing: context_a=%d frames (%.2fs), gap=%d frames (%.2fs), "
                 "context_b=%d frames (%.2fs), total=%d frames, "
@@ -158,6 +158,14 @@ class BlendHandler(StateHandlerBase):
 
             if self._generation.is_generation_cancelled():
                 raise RuntimeError("Generation was cancelled")
+
+            # Verify retake output metadata
+            from ltx_pipelines.utils.media_io import get_videostream_metadata
+            rt_fps, rt_frames, rt_w, rt_h = get_videostream_metadata(retake_output_path)
+            logger.info(
+                "Retake output: fps=%.4f, frames=%d, %dx%d (expected %d frames)",
+                rt_fps, rt_frames, rt_w, rt_h, total_frames,
+            )
 
             # Step 4: Extract just the gap portion from the retake output
             self._extract_gap(
@@ -225,22 +233,29 @@ class BlendHandler(StateHandlerBase):
         duration_a = context_a_frames / fps
         duration_b = context_b_frames / fps
 
+        # Compute actual -ss and trim offsets. When seek < read_margin, -ss is
+        # clamped to 0 and trim_offset equals the seek position itself.
+        ss_a = max(0.0, seek_a - read_margin)
+        trim_offset_a = seek_a - ss_a
+        ss_b = max(0.0, seek_b - read_margin)
+        trim_offset_b = seek_b - ss_b
+
         cmd = [
             "ffmpeg", "-y",
-            "-ss", str(max(0, seek_a - read_margin)), "-i", video_a,
-            "-ss", str(max(0, seek_b - read_margin)), "-i", video_b,
+            "-ss", str(ss_a), "-i", video_a,
+            "-ss", str(ss_b), "-i", video_b,
             "-filter_complex",
             (
                 # Trim clip A: seek to the right position, convert fps, take exact frame count
                 f"[0:v]fps={fps},setpts=PTS-STARTPTS,"
-                f"trim=start={read_margin}:end={read_margin + duration_a},setpts=PTS-STARTPTS[va];"
+                f"trim=start={trim_offset_a}:end={trim_offset_a + duration_a},setpts=PTS-STARTPTS[va];"
                 # Get last frame of clip A and loop for gap
                 f"[0:v]fps={fps},setpts=PTS-STARTPTS,"
-                f"trim=start={read_margin + duration_a - 1.0/fps},setpts=PTS-STARTPTS[lastframe];"
+                f"trim=start={trim_offset_a + duration_a - 1.0/fps},setpts=PTS-STARTPTS[lastframe];"
                 f"[lastframe]loop=loop={gap_frames - 1}:size=1:start=0,setpts=N/{fps}/TB[vgap];"
-                # Trim clip B: take exact frame count
+                # Trim clip B: take exact frame count from its start
                 f"[1:v]fps={fps},setpts=PTS-STARTPTS,"
-                f"trim=start={read_margin}:end={read_margin + duration_b},setpts=PTS-STARTPTS[vb];"
+                f"trim=start={trim_offset_b}:end={trim_offset_b + duration_b},setpts=PTS-STARTPTS[vb];"
                 # Concatenate and limit to exact total frame count
                 f"[va][vgap][vb]concat=n=3:v=1:a=0,"
                 f"trim=end_frame={total_frames},setpts=PTS-STARTPTS[vout]"
@@ -332,13 +347,22 @@ class BlendHandler(StateHandlerBase):
         logger.info("Using lossless PNG source for %s: %s", video_path, tmp.name)
         return tmp.name, tmp.name
 
-    def _validate_composite(self, path: str) -> None:
+    def _validate_composite(self, path: str, expected_fps: int) -> None:
         """Validate that the composite video meets retake constraints."""
         from ltx_core.types import SpatioTemporalScaleFactors
         from ltx_pipelines.utils.media_io import get_videostream_metadata
 
         fps, num_frames, width, height = get_videostream_metadata(path)
-        del fps
+        logger.info(
+            "Composite metadata: fps=%.4f (expected %d), frames=%d, %dx%d",
+            fps, expected_fps, num_frames, width, height,
+        )
+        if abs(fps - expected_fps) > 0.5:
+            raise HTTPError(
+                500,
+                f"Composite fps mismatch: got {fps:.4f}, expected {expected_fps}. "
+                f"The retake mask would target the wrong frames.",
+            )
         scale = SpatioTemporalScaleFactors.default()
         if (num_frames - 1) % scale.time != 0:
             snapped = ((num_frames - 1) // scale.time) * scale.time + 1
