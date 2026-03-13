@@ -25,6 +25,7 @@ class ModelFileDownloadSpec:
 
 MODEL_FILE_ORDER: tuple[ModelFileType, ...] = (
     "checkpoint",
+    "full_checkpoint",
     "upsampler",
     "distilled_lora",
     "ic_lora",
@@ -43,6 +44,13 @@ DEFAULT_MODEL_DOWNLOAD_SPECS: dict[ModelFileType, ModelFileDownloadSpec] = {
         is_folder=False,
         repo_id="Lightricks/LTX-2.3",
         description="Main transformer model",
+    ),
+    "full_checkpoint": ModelFileDownloadSpec(
+        relative_path=Path("ltx-2.3-22b-dev.safetensors"),
+        expected_size_bytes=43_000_000_000,
+        is_folder=False,
+        repo_id="Lightricks/LTX-2.3",
+        description="Full (non-distilled) transformer model for quality retake",
     ),
     "upsampler": ModelFileDownloadSpec(
         relative_path=Path("ltx-2.3-spatial-upscaler-x2-1.0.safetensors"),

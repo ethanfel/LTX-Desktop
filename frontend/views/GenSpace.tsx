@@ -22,6 +22,7 @@ import {
   getAllowedForcedApiDurations,
   sanitizeForcedApiVideoSettings,
 } from '../lib/api-video-options'
+import { backendFetch } from '../lib/backend'
 import { logger } from '../lib/logger'
 import { RetakePanel } from '../components/RetakePanel'
 import { ICLoraPanel, CONDITIONING_TYPES } from '../components/ICLoraPanel'
@@ -1022,6 +1023,45 @@ export function GenSpace() {
   })
   const [retakePanelKey, setRetakePanelKey] = useState(0)
   const [retakeDistilled, setRetakeDistilled] = useState(true)
+  const [fullCheckpointDownloaded, setFullCheckpointDownloaded] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    backendFetch('/api/models/status')
+      .then(async (res) => {
+        if (res.ok) {
+          const data = await res.json()
+          const fullModel = data.models?.find((m: { id: string }) => m.id === 'full_checkpoint')
+          setFullCheckpointDownloaded(fullModel?.downloaded ?? false)
+        }
+      })
+      .catch(() => { /* ignore */ })
+  }, [])
+
+  const handleFullCheckpointDownload = () => {
+    backendFetch('/api/models/download', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ modelTypes: ['full_checkpoint'] }),
+    })
+      .then(async (res) => {
+        if (res.ok) {
+          const poll = setInterval(async () => {
+            try {
+              const statusRes = await backendFetch('/api/models/status')
+              if (statusRes.ok) {
+                const data = await statusRes.json()
+                const fullModel = data.models?.find((m: { id: string }) => m.id === 'full_checkpoint')
+                if (fullModel?.downloaded) {
+                  setFullCheckpointDownloaded(true)
+                  clearInterval(poll)
+                }
+              }
+            } catch { /* ignore */ }
+          }, 5000)
+        }
+      })
+      .catch(() => { /* ignore */ })
+  }
   const [retakeInitial, setRetakeInitial] = useState<{
     videoUrl: string | null
     videoPath: string | null
@@ -1702,6 +1742,8 @@ export function GenSpace() {
             processingStatus={retakeStatus}
             distilled={retakeDistilled}
             onDistilledChange={setRetakeDistilled}
+            fullCheckpointDownloaded={fullCheckpointDownloaded ?? false}
+            onFullCheckpointDownloadRequest={handleFullCheckpointDownload}
             onChange={(data) => setRetakeInput(data)}
           />
         </div>

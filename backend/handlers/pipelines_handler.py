@@ -28,6 +28,7 @@ from state.app_state_types import (
     GenerationRunning,
     GpuSlot,
     ICLoraState,
+    ModelFileType,
     RetakePipelineState,
     VideoPipelineState,
     VideoPipelineWarmth,
@@ -385,8 +386,9 @@ class PipelinesHandler(StateHandlerBase):
         from ltx_core.quantization import QuantizationPolicy
 
         quantization = QuantizationPolicy.fp8_cast() if quantized else None
+        checkpoint_type: ModelFileType = "checkpoint" if distilled else "full_checkpoint"
         pipeline = self._retake_pipeline_class.create(
-            checkpoint_path=str(resolve_model_path(self.models_dir, self.config.model_download_specs,"checkpoint")),
+            checkpoint_path=str(resolve_model_path(self.models_dir, self.config.model_download_specs, checkpoint_type)),
             gemma_root=self._text_handler.resolve_gemma_root(),
             device=self.config.device,
             loras=[],

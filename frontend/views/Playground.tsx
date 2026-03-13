@@ -18,6 +18,7 @@ import { useBackend } from '../hooks/use-backend'
 import { useProjects } from '../contexts/ProjectContext'
 import { useAppSettings } from '../contexts/AppSettingsContext'
 import { fileUrlToPath } from '../lib/url-to-path'
+import { backendFetch } from '../lib/backend'
 import { sanitizeForcedApiVideoSettings } from '../lib/api-video-options'
 import { RetakePanel } from '../components/RetakePanel'
 import { ICLoraPanel, CONDITIONING_TYPES, type ICLoraConditioningType } from '../components/ICLoraPanel'
@@ -121,6 +122,46 @@ export function Playground() {
   })
   const [retakePanelKey, setRetakePanelKey] = useState(0)
   const [retakeDistilled, setRetakeDistilled] = useState(true)
+  const [fullCheckpointDownloaded, setFullCheckpointDownloaded] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    backendFetch('/api/models/status')
+      .then(async (res) => {
+        if (res.ok) {
+          const data = await res.json()
+          const fullModel = data.models?.find((m: { id: string }) => m.id === 'full_checkpoint')
+          setFullCheckpointDownloaded(fullModel?.downloaded ?? false)
+        }
+      })
+      .catch(() => { /* ignore */ })
+  }, [])
+
+  const handleFullCheckpointDownload = () => {
+    backendFetch('/api/models/download', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ modelTypes: ['full_checkpoint'] }),
+    })
+      .then(async (res) => {
+        if (res.ok) {
+          // Poll until downloaded
+          const poll = setInterval(async () => {
+            try {
+              const statusRes = await backendFetch('/api/models/status')
+              if (statusRes.ok) {
+                const data = await statusRes.json()
+                const fullModel = data.models?.find((m: { id: string }) => m.id === 'full_checkpoint')
+                if (fullModel?.downloaded) {
+                  setFullCheckpointDownloaded(true)
+                  clearInterval(poll)
+                }
+              }
+            } catch { /* ignore */ }
+          }, 5000)
+        }
+      })
+      .catch((e) => logger.error(`Failed to start full checkpoint download: ${e}`))
+  }
   const [icLoraInput, setIcLoraInput] = useState({
     videoUrl: null as string | null,
     videoPath: null as string | null,
@@ -308,6 +349,8 @@ export function Playground() {
                 processingStatus={retakeStatus}
                 distilled={retakeDistilled}
                 onDistilledChange={setRetakeDistilled}
+                fullCheckpointDownloaded={fullCheckpointDownloaded ?? false}
+                onFullCheckpointDownloadRequest={handleFullCheckpointDownload}
                 onChange={(data) => setRetakeInput(data)}
               />
             )}

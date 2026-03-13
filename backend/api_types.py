@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field, StringConstraints
 NonEmptyPrompt = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 ModelFileType = Literal[
     "checkpoint",
+    "full_checkpoint",
     "upsampler",
     "distilled_lora",
     "ic_lora",

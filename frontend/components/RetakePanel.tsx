@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
-import { Film, Play, Pause, Volume2, VolumeX, Loader2, Upload, Trash2, RefreshCw } from 'lucide-react'
+import { Film, Play, Pause, Volume2, VolumeX, Loader2, Upload, Trash2, RefreshCw, Download } from 'lucide-react'
 import { logger } from '../lib/logger'
 import { fileUrlToPath } from '../lib/url-to-path'
 
@@ -13,6 +13,8 @@ interface RetakePanelProps {
   fillHeight?: boolean
   distilled?: boolean
   onDistilledChange?: (distilled: boolean) => void
+  fullCheckpointDownloaded?: boolean
+  onFullCheckpointDownloadRequest?: () => void
   onChange?: (data: {
     videoUrl: string | null
     videoPath: string | null
@@ -46,6 +48,8 @@ export function RetakePanel({
   fillHeight = false,
   distilled = true,
   onDistilledChange,
+  fullCheckpointDownloaded = true,
+  onFullCheckpointDownloadRequest,
   onChange,
 }: RetakePanelProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -629,8 +633,22 @@ export function RetakePanel({
                 </div>
               </div>
               <p className="text-[10px] text-zinc-500 mt-1">
-                {distilled ? 'Fast generation using distilled model' : 'Higher quality using full pipeline (slower)'}
+                {distilled
+                  ? 'Fast generation using distilled model'
+                  : fullCheckpointDownloaded
+                    ? 'Higher quality using full pipeline (slower)'
+                    : 'Full model required — download to enable quality mode'}
               </p>
+              {!distilled && !fullCheckpointDownloaded && (
+                <button
+                  type="button"
+                  onClick={() => onFullCheckpointDownloadRequest?.()}
+                  className="mt-1.5 flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium transition-colors"
+                >
+                  <Download className="h-3 w-3" />
+                  Download Full Model (~43 GB)
+                </button>
+              )}
             </div>
 
             {isProcessing && (
