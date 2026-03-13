@@ -806,20 +806,18 @@ function PromptBar({
               }
             />
 
-            {shouldVideoGenerateWithLtxApi && (
-              <SettingsDropdown
-                title="FPS"
-                value={String(settings.fps)}
-                onChange={(v) => onSettingsChange({ ...settings, fps: parseInt(v) })}
-                options={videoFpsOptions.map((value) => ({ value: String(value), label: `${value}` }))}
-                trigger={
-                  <>
-                    <Film className="h-3.5 w-3.5" />
-                    <span>{settings.fps} FPS</span>
-                  </>
-                }
-              />
-            )}
+            <SettingsDropdown
+              title="FPS"
+              value={String(settings.fps)}
+              onChange={(v) => onSettingsChange({ ...settings, fps: parseInt(v) })}
+              options={videoFpsOptions.map((value) => ({ value: String(value), label: `${value}` }))}
+              trigger={
+                <>
+                  <Film className="h-3.5 w-3.5" />
+                  <span>{settings.fps} FPS</span>
+                </>
+              }
+            />
             
             {/* Aspect Ratio dropdown */}
             <SettingsDropdown
