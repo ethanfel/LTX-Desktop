@@ -214,10 +214,10 @@ class IcLoraHandler(StateHandlerBase):
 
             self._generation.update_progress("inference", 15, 0, 1)
 
-            # Use input video resolution, snapped to multiples of 32
-            # (required by the VAE). Previously hardcoded to 768px width.
-            width = (input_width // 32) * 32
-            height = (input_height // 32) * 32
+            # Use input video resolution, snapped to multiples of 64
+            # (required by two-stage IC-LoRA pipeline).
+            width = (input_width // 64) * 64
+            height = (input_height // 64) * 64
             width = max(width, 128)
             height = max(height, 128)
 
