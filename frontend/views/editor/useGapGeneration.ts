@@ -450,6 +450,8 @@ export function useGapGeneration({
       let afterFrameUrl = ''
 
       const framePromises: Promise<void>[] = []
+      // Blend mode needs high-res frames for generation conditioning; other modes only need thumbnails for AI prompt suggestion
+      const extractWidth = mode === 'blend' ? 1280 : 512
 
       if (clipBefore) {
         const clipSrc = resolveClipSrc(clipBefore)
@@ -458,7 +460,7 @@ export function useGapGeneration({
           if (clipBefore.asset?.type === 'video') {
             const seekTime = clipBefore.trimStart + clipBefore.duration * clipBefore.speed - 0.1
             framePromises.push(
-              window.electronAPI.extractVideoFrame(clipSrc, Math.max(0, seekTime), 512, 3)
+              window.electronAPI.extractVideoFrame(clipSrc, Math.max(0, seekTime), extractWidth, 3)
                 .then(result => { beforeFrame = result.path; beforeFrameUrl = result.url })
                 .catch(() => {})
             )
@@ -475,7 +477,7 @@ export function useGapGeneration({
         if (clipSrc) {
           if (clipAfter.asset?.type === 'video') {
             framePromises.push(
-              window.electronAPI.extractVideoFrame(clipSrc, clipAfter.trimStart + 0.1, 512, 3)
+              window.electronAPI.extractVideoFrame(clipSrc, clipAfter.trimStart + 0.1, extractWidth, 3)
                 .then(result => { afterFrame = result.path; afterFrameUrl = result.url })
                 .catch(() => {})
             )

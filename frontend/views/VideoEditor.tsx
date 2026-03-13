@@ -1575,9 +1575,11 @@ export function VideoEditor() {
     const gapStart = cutPoint - trimA
     const gapEnd = gapStart + gapDuration
     setGapImageFile(null)
+    // Default blend to pro model for better first+last frame conditioning quality
+    setGapSettings(prev => ({ ...prev, model: 'pro' }))
     setSelectedGap({ trackIndex: clip.trackIndex, startTime: gapStart, endTime: gapEnd })
     setGapGenerateMode('blend')
-  }, [clips, blendOverlap, pushUndo, setClips, setSelectedGap, setGapGenerateMode, setGapImageFile, setBlendInfo])
+  }, [clips, blendOverlap, pushUndo, setClips, setSelectedGap, setGapGenerateMode, setGapImageFile, setBlendInfo, setGapSettings])
 
   const handleRetakeClip = useCallback((clip: TimelineClip) => {
     const liveAsset = getLiveAsset(clip)
