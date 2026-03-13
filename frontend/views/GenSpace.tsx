@@ -364,6 +364,7 @@ function PromptBar({
     imageResolution: string
     variations: number
     audio?: boolean
+    negativePrompt: string
   }
   onSettingsChange: (settings: any) => void
   shouldVideoGenerateWithLtxApi: boolean
@@ -552,6 +553,17 @@ function PromptBar({
             }
             className="w-full bg-transparent text-white text-sm placeholder:text-zinc-500 focus:outline-none px-2 py-2 resize-none overflow-y-auto h-[70px] leading-5"
           />
+          {mode === 'video' && (
+            <div className="px-2 pb-1">
+              <input
+                type="text"
+                value={settings.negativePrompt || ''}
+                onChange={(e) => onSettingsChange({ ...settings, negativePrompt: e.target.value })}
+                placeholder="Negative prompt (optional)..."
+                className="w-full bg-transparent text-[11px] text-zinc-400 placeholder:text-zinc-600 focus:outline-none focus:text-zinc-300 px-0 py-0.5 border-t border-zinc-800/40"
+              />
+            </div>
+          )}
         </div>
 
       </div>
@@ -845,6 +857,7 @@ const DEFAULT_VIDEO_SETTINGS = {
   imageResolution: '1080p',
   variations: 1,
   audio: true,
+  negativePrompt: '',
 }
 
 export function GenSpace() {
@@ -899,7 +912,7 @@ export function GenSpace() {
   } | null>(null)
   const [settings, setSettings] = useState(() => ({ ...DEFAULT_VIDEO_SETTINGS }))
   const applyForcedVideoSettings = useCallback(
-    (next: { model: string; duration: number; videoResolution: string; fps: number; audio: boolean; aspectRatio: string; imageResolution: string; variations: number }) => {
+    (next: { model: string; duration: number; videoResolution: string; fps: number; audio: boolean; aspectRatio: string; imageResolution: string; variations: number; negativePrompt: string }) => {
       if (!shouldVideoGenerateWithLtxApi || mode !== 'video') return next
       return sanitizeForcedApiVideoSettings(next, { hasAudio: !!inputAudio })
     },
@@ -1364,6 +1377,7 @@ export function GenSpace() {
           imageResolution: videoSettings.imageResolution,
           imageAspectRatio: videoSettings.aspectRatio,
           imageSteps: 4,
+          negativePrompt: videoSettings.negativePrompt || '',
         },
         audioPath,
       )

@@ -144,6 +144,7 @@ export function useGeneration(): UseGenerationReturn {
         audio: String(settings.audio),
         cameraMotion: settings.cameraMotion,
         aspectRatio: settings.aspectRatio || '16:9',
+        negativePrompt: settings.negativePrompt || '',
       }
       if (imagePath) {
         body.imagePath = imagePath

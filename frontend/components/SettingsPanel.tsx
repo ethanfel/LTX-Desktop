@@ -1,3 +1,5 @@
+import { useState } from 'react'
+import { ChevronDown } from 'lucide-react'
 import { Select } from './ui/select'
 import type { GenerationMode } from './ModeTabs'
 import {
@@ -20,6 +22,7 @@ export interface GenerationSettings {
   imageAspectRatio: string
   imageSteps: number
   variations?: number  // Number of image variations to generate
+  negativePrompt?: string
 }
 
 interface SettingsPanelProps {
@@ -222,6 +225,55 @@ export function SettingsPanel({
           </Select>
         </div>
       </div>
+
+      {/* Advanced Section */}
+      <AdvancedSection
+        negativePrompt={settings.negativePrompt || ''}
+        onNegativePromptChange={(value) => handleChange('negativePrompt', value)}
+        disabled={disabled}
+      />
+    </div>
+  )
+}
+
+function AdvancedSection({
+  negativePrompt,
+  onNegativePromptChange,
+  disabled,
+}: {
+  negativePrompt: string
+  onNegativePromptChange: (value: string) => void
+  disabled?: boolean
+}) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <div className="border border-zinc-800 rounded-lg overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="flex w-full items-center justify-between px-3 py-2 text-xs font-medium text-zinc-400 hover:text-zinc-300 transition-colors"
+      >
+        Advanced
+        <ChevronDown
+          className={`h-3.5 w-3.5 transition-transform ${open ? 'rotate-180' : ''}`}
+        />
+      </button>
+      {open && (
+        <div className="px-3 pb-3 space-y-1.5">
+          <label className="block text-[11px] font-medium text-zinc-500">
+            Negative Prompt
+          </label>
+          <textarea
+            value={negativePrompt}
+            onChange={(e) => onNegativePromptChange(e.target.value)}
+            placeholder="Describe what to avoid..."
+            disabled={disabled}
+            rows={2}
+            className="w-full rounded-md border border-zinc-700 bg-zinc-800 px-2.5 py-2 text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500 focus:border-zinc-500 disabled:cursor-not-allowed disabled:opacity-50 resize-y"
+          />
+        </div>
+      )}
     </div>
   )
 }

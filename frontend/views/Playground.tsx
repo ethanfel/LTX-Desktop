@@ -30,6 +30,7 @@ const DEFAULT_SETTINGS: GenerationSettings = {
   audio: true,
   cameraMotion: 'none',
   aspectRatio: '16:9',
+  negativePrompt: '',
   // Image settings
   imageResolution: '1080p',
   imageAspectRatio: '16:9',
