@@ -99,6 +99,16 @@ export function useGapGeneration({
   const [gapBeforeFramePath, setGapBeforeFramePath] = useState<string | null>(null)
   const [gapAfterFramePath, setGapAfterFramePath] = useState<string | null>(null)
 
+  // Blend mode: configurable overlap duration and original clip state for re-trimming
+  const [blendOverlap, setBlendOverlap] = useState(2) // seconds per side
+  const [blendInfo, setBlendInfo] = useState<{
+    clipAId: string
+    clipBId: string
+    trackIndex: number
+    cutPoint: number // original boundary between clipA and clipB
+    originals: Map<string, TimelineClip> // original state of all affected clips
+  } | null>(null)
+
   // --- Gap detection: find empty spaces between clips on each non-subtitle track ---
   const timelineGaps = useMemo(() => {
     const gaps: { trackIndex: number; startTime: number; endTime: number }[] = []
@@ -148,6 +158,37 @@ export function useGapGeneration({
     
     setSelectedGap(null)
   }, [])
+
+  // Re-trim clips when blend overlap changes
+  const updateBlendOverlap = useCallback((newOverlap: number) => {
+    if (!blendInfo) return
+    const MIN_REMAINING = 0.5
+    const origA = blendInfo.originals.get(blendInfo.clipAId)
+    const origB = blendInfo.originals.get(blendInfo.clipBId)
+    if (!origA || !origB) return
+
+    const trimA = Math.min(newOverlap, origA.duration * 0.4, origA.duration - MIN_REMAINING)
+    const trimB = Math.min(newOverlap, origB.duration * 0.4, origB.duration - MIN_REMAINING)
+    const gapDuration = trimA + trimB
+
+    // Restore originals then apply new trim
+    setClips(prev => prev.map(c => {
+      const orig = blendInfo.originals.get(c.id)
+      if (!orig) return c
+      if (c.id === blendInfo.clipAId || (origA.linkedClipIds ?? []).includes(c.id)) {
+        return { ...orig, duration: orig.duration - trimA }
+      }
+      if (c.id === blendInfo.clipBId || (origB.linkedClipIds ?? []).includes(c.id)) {
+        return { ...orig, startTime: orig.startTime + trimB, duration: orig.duration - trimB, trimStart: orig.trimStart + trimB * orig.speed }
+      }
+      return c
+    }))
+
+    const gapStart = blendInfo.cutPoint - trimA
+    const gapEnd = gapStart + gapDuration
+    setSelectedGap({ trackIndex: blendInfo.trackIndex, startTime: gapStart, endTime: gapEnd })
+    setBlendOverlap(newOverlap)
+  }, [blendInfo, setClips, setSelectedGap])
 
   // Handle starting generation in a gap
   const handleGapGenerate = useCallback(async () => {
@@ -532,6 +573,7 @@ export function useGapGeneration({
       setGapAfterFrame(null)
       setGapBeforeFramePath(null)
       setGapAfterFramePath(null)
+      setBlendInfo(null)
       gapSuggestionAbortRef.current?.abort()
       suggestionFiredKeyRef.current = null
       return
@@ -599,6 +641,12 @@ export function useGapGeneration({
     gapApplyAudioToTrack,
     setGapApplyAudioToTrack,
     regenerateSuggestion,
+    // Blend
+    blendOverlap,
+    blendInfo,
+    setBlendInfo,
+    setBlendOverlap,
+    updateBlendOverlap,
     // Background generation tracking
     generatingGap,
     isRegenerating,

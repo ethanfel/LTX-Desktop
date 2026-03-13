@@ -989,6 +989,7 @@ export function VideoEditor() {
     gapSuggesting, gapSuggestion, gapSuggestionError, gapSuggestionNoApiKey, gapBeforeFrame, gapAfterFrame,
     gapApplyAudioToTrack, setGapApplyAudioToTrack,
     regenerateSuggestion,
+    blendOverlap, setBlendInfo, updateBlendOverlap,
     generatingGap, regenProgress: gapRegenProgress,
     cancelGapGeneration,
     timelineGaps, deleteGap, handleGapGenerate,
@@ -1507,7 +1508,7 @@ export function VideoEditor() {
 
   // AI Blend: trim adjacent clips to create a gap, then open gap generation in blend mode
   const handleBlendClips = useCallback((clip: TimelineClip) => {
-    const OVERLAP_DURATION = 2 // seconds from each side
+    const overlap = blendOverlap
 
     const trackClips = clips
       .filter(c => c.trackIndex === clip.trackIndex && c.type === 'video')
@@ -1534,9 +1535,24 @@ export function VideoEditor() {
     const MIN_REMAINING = 0.5 // seconds — clips must retain at least this much
     if (clipA.duration <= MIN_REMAINING || clipB.duration <= MIN_REMAINING) return
 
+    // Store original clip states for re-trimming when overlap changes
+    const cutPoint = clipA.startTime + clipA.duration
+    const originals = new Map<string, TimelineClip>()
+    originals.set(clipA.id, { ...clipA })
+    originals.set(clipB.id, { ...clipB })
+    for (const lid of clipA.linkedClipIds ?? []) {
+      const lc = clips.find(c => c.id === lid)
+      if (lc) originals.set(lc.id, { ...lc })
+    }
+    for (const lid of clipB.linkedClipIds ?? []) {
+      const lc = clips.find(c => c.id === lid)
+      if (lc) originals.set(lc.id, { ...lc })
+    }
+    setBlendInfo({ clipAId: clipA.id, clipBId: clipB.id, trackIndex: clip.trackIndex, cutPoint, originals })
+
     // Calculate how much to trim from each clip (capped at 40% of duration, leaving MIN_REMAINING)
-    const trimA = Math.min(OVERLAP_DURATION, clipA.duration * 0.4, clipA.duration - MIN_REMAINING)
-    const trimB = Math.min(OVERLAP_DURATION, clipB.duration * 0.4, clipB.duration - MIN_REMAINING)
+    const trimA = Math.min(overlap, clipA.duration * 0.4, clipA.duration - MIN_REMAINING)
+    const trimB = Math.min(overlap, clipB.duration * 0.4, clipB.duration - MIN_REMAINING)
     const gapDuration = trimA + trimB
 
     pushUndo()
@@ -1556,12 +1572,12 @@ export function VideoEditor() {
     }))
 
     // Open gap generation in blend mode at the newly created gap
-    const gapStart = clipA.startTime + clipA.duration - trimA
+    const gapStart = cutPoint - trimA
     const gapEnd = gapStart + gapDuration
     setGapImageFile(null)
     setSelectedGap({ trackIndex: clip.trackIndex, startTime: gapStart, endTime: gapEnd })
     setGapGenerateMode('blend')
-  }, [clips, pushUndo, setClips, setSelectedGap, setGapGenerateMode, setGapImageFile])
+  }, [clips, blendOverlap, pushUndo, setClips, setSelectedGap, setGapGenerateMode, setGapImageFile, setBlendInfo])
 
   const handleRetakeClip = useCallback((clip: TimelineClip) => {
     const liveAsset = getLiveAsset(clip)
@@ -4211,6 +4227,8 @@ export function VideoEditor() {
           regenerateSuggestion={regenerateSuggestion}
           gapSuggestionError={gapSuggestionError}
           gapSuggestionNoApiKey={gapSuggestionNoApiKey}
+          blendOverlap={blendOverlap}
+          onBlendOverlapChange={updateBlendOverlap}
         />
       )}
 
