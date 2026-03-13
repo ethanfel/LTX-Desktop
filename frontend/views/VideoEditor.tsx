@@ -1505,6 +1505,56 @@ export function VideoEditor() {
     return assets.find(a => a.id === clip.assetId) || clip.asset
   }, [assets])
 
+  // AI Blend: trim adjacent clips to create a gap, then open gap generation in blend mode
+  const handleBlendClips = useCallback((clip: TimelineClip) => {
+    const OVERLAP_DURATION = 2 // seconds from each side
+
+    const trackClips = clips
+      .filter(c => c.trackIndex === clip.trackIndex && c.type === 'video')
+      .sort((a, b) => a.startTime - b.startTime)
+
+    const clipEnd = clip.startTime + clip.duration
+    const clipAfter = trackClips.find(c => Math.abs(c.startTime - clipEnd) < 0.1)
+    const clipBefore = trackClips.find(c => c.id !== clip.id && Math.abs((c.startTime + c.duration) - clip.startTime) < 0.1)
+
+    // Prefer blending with the next clip, fall back to previous
+    let clipA: TimelineClip
+    let clipB: TimelineClip
+    if (clipAfter) {
+      clipA = clip
+      clipB = clipAfter
+    } else if (clipBefore) {
+      clipA = clipBefore
+      clipB = clip
+    } else {
+      return // no adjacent clip found
+    }
+
+    // Calculate how much to trim from each clip (capped at half their duration)
+    const trimA = Math.min(OVERLAP_DURATION, clipA.duration * 0.4)
+    const trimB = Math.min(OVERLAP_DURATION, clipB.duration * 0.4)
+    const gapDuration = trimA + trimB
+
+    pushUndo()
+
+    // Trim clip A (increase trimEnd) and clip B (increase trimStart, shift startTime)
+    setClips(prev => prev.map(c => {
+      if (c.id === clipA.id) {
+        return { ...c, duration: c.duration - trimA }
+      }
+      if (c.id === clipB.id) {
+        return { ...c, startTime: c.startTime + trimB, duration: c.duration - trimB, trimStart: c.trimStart + trimB * c.speed }
+      }
+      return c
+    }))
+
+    // Open gap generation in blend mode at the newly created gap
+    const gapStart = clipA.startTime + clipA.duration - trimA
+    const gapEnd = gapStart + gapDuration
+    setSelectedGap({ trackIndex: clip.trackIndex, startTime: gapStart, endTime: gapEnd })
+    setGapGenerateMode('blend')
+  }, [clips, pushUndo, setClips, setSelectedGap, setGapGenerateMode])
+
   const handleRetakeClip = useCallback((clip: TimelineClip) => {
     const liveAsset = getLiveAsset(clip)
     if (!liveAsset) return
@@ -4102,6 +4152,7 @@ export function VideoEditor() {
             canUseIcLora={canUseIcLora}
             onCaptureFrameForVideo={handleCaptureFrameForVideo}
             onCreateVideoFromAudio={handleCreateVideoFromAudio}
+            onBlendClips={handleBlendClips}
           />
         )
       })()}

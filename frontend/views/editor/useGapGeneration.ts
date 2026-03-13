@@ -15,7 +15,7 @@ export interface UseGapGenerationParams {
   currentProjectId: string | null
   addAsset: (projectId: string, asset: Omit<Asset, 'id' | 'createdAt'>) => Asset
   resolveClipSrc: (clip: TimelineClip | null) => string
-  regenGenerate: (prompt: string, imagePath: string | null, settings: GenerationSettings) => Promise<void>
+  regenGenerate: (prompt: string, imagePath: string | null, settings: GenerationSettings, audioPath?: string | null, lastFrameImagePath?: string | null) => Promise<void>
   regenGenerateImage: (prompt: string, settings: GenerationSettings) => Promise<void>
   regenVideoUrl: string | null
   regenVideoPath: string | null
@@ -53,7 +53,7 @@ export function useGapGeneration({
 }: UseGapGenerationParams) {
   // Gap selection and generation
   const [selectedGap, setSelectedGap] = useState<{ trackIndex: number; startTime: number; endTime: number } | null>(null)
-  const [gapGenerateMode, setGapGenerateMode] = useState<'text-to-video' | 'image-to-video' | 'text-to-image' | null>(null)
+  const [gapGenerateMode, setGapGenerateMode] = useState<'text-to-video' | 'image-to-video' | 'text-to-image' | 'blend' | null>(null)
   const gapGenerateModeRef = useRef(gapGenerateMode)
   gapGenerateModeRef.current = gapGenerateMode
   const [gapPrompt, setGapPrompt] = useState('')
@@ -81,7 +81,7 @@ export function useGapGeneration({
   // Tracks the gap currently being generated in the background (after modal closes)
   const [generatingGap, setGeneratingGap] = useState<{
     trackIndex: number; startTime: number; endTime: number
-    mode: 'text-to-video' | 'image-to-video' | 'text-to-image'
+    mode: 'text-to-video' | 'image-to-video' | 'text-to-image' | 'blend'
     prompt: string; settings: GenerationSettings
     imageFile: File | null; applyAudio: boolean
   } | null>(null)
@@ -95,6 +95,9 @@ export function useGapGeneration({
   // Frames extracted from neighboring clips for the gap animation header
   const [gapBeforeFrame, setGapBeforeFrame] = useState<string | null>(null)
   const [gapAfterFrame, setGapAfterFrame] = useState<string | null>(null)
+  // File paths for extracted frames (used by blend mode for generation conditioning)
+  const [gapBeforeFramePath, setGapBeforeFramePath] = useState<string | null>(null)
+  const [gapAfterFramePath, setGapAfterFramePath] = useState<string | null>(null)
 
   // --- Gap detection: find empty spaces between clips on each non-subtitle track ---
   const timelineGaps = useMemo(() => {
@@ -180,6 +183,11 @@ export function useGapGeneration({
     try {
       if (mode === 'text-to-image') {
         await regenGenerateImage(finalPrompt, settings)
+      } else if (mode === 'blend') {
+        // Blend mode: use before frame as first frame, after frame as last frame
+        const imagePath = gapBeforeFramePath || null
+        const lastFramePath = gapAfterFramePath || null
+        await regenGenerate(finalPrompt, imagePath, settings, null, lastFramePath)
       } else {
         // Convert File to filesystem path for the JSON-based generate API
         let imagePath: string | null = null
@@ -240,7 +248,7 @@ export function useGapGeneration({
         resolution: isImageResult ? gap.settings.imageResolution : gap.settings.videoResolution,
         duration: type === 'video' ? gapDuration : undefined,
         generationParams: {
-          mode: (isImageResult ? 'text-to-image' : (gap.imageFile ? 'image-to-video' : 'text-to-video')) as 'text-to-video' | 'image-to-video' | 'text-to-image',
+          mode: (isImageResult ? 'text-to-image' : (gap.mode === 'blend' ? 'image-to-video' : gap.imageFile ? 'image-to-video' : 'text-to-video')) as 'text-to-video' | 'image-to-video' | 'text-to-image',
           prompt: gap.prompt,
           model: gap.settings.model,
           duration: Math.min(Math.max(1, Math.round(gapDuration)), gap.settings.model === 'pro' ? 10 : 20),
@@ -443,6 +451,8 @@ export function useGapGeneration({
 
       if (beforeFrameUrl) setGapBeforeFrame(beforeFrameUrl)
       if (afterFrameUrl) setGapAfterFrame(afterFrameUrl)
+      if (beforeFrame) setGapBeforeFramePath(beforeFrame)
+      if (afterFrame) setGapAfterFramePath(afterFrame)
       
       if (!beforeFrame && !afterFrame && !beforePrompt && !afterPrompt) {
         setGapSuggesting(false)
@@ -520,6 +530,8 @@ export function useGapGeneration({
       setGapSuggestionNoApiKey(false)
       setGapBeforeFrame(null)
       setGapAfterFrame(null)
+      setGapBeforeFramePath(null)
+      setGapAfterFramePath(null)
       gapSuggestionAbortRef.current?.abort()
       suggestionFiredKeyRef.current = null
       return
@@ -582,6 +594,8 @@ export function useGapGeneration({
     gapSuggestionNoApiKey,
     gapBeforeFrame,
     gapAfterFrame,
+    gapBeforeFramePath,
+    gapAfterFramePath,
     gapApplyAudioToTrack,
     setGapApplyAudioToTrack,
     regenerateSuggestion,

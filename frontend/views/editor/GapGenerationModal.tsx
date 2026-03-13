@@ -13,7 +13,7 @@ interface TimelineGap {
   endTime: number
 }
 
-type GapGenerateMode = 'text-to-video' | 'image-to-video' | 'text-to-image'
+type GapGenerateMode = 'text-to-video' | 'image-to-video' | 'text-to-image' | 'blend'
 
 
 interface GapGenerationModalProps {
@@ -77,7 +77,8 @@ export function GapGenerationModal({
 }: GapGenerationModalProps) {
   if (!selectedGap) return null
 
-  const isVideoMode = gapGenerateMode === 'text-to-video' || gapGenerateMode === 'image-to-video'
+  const isBlendMode = gapGenerateMode === 'blend'
+  const isVideoMode = gapGenerateMode === 'text-to-video' || gapGenerateMode === 'image-to-video' || isBlendMode
   const isImageMode = gapGenerateMode === 'text-to-image'
 
   const gapImageUrl = useMemo(() => {
@@ -85,12 +86,14 @@ export function GapGenerationModal({
     return URL.createObjectURL(gapImageFile)
   }, [gapImageFile])
 
-  const modalTitle = isVideoMode
+  const modalTitle = isBlendMode
+    ? 'AI Blend'
+    : isVideoMode
     ? (gapImageFile ? 'Image to Video' : 'Generate Video')
     : 'Generate Image'
 
   const settingsMode: GenerationMode = isVideoMode
-    ? (gapImageFile ? 'image-to-video' : 'text-to-video')
+    ? (isBlendMode || gapImageFile ? 'image-to-video' : 'text-to-video')
     : 'text-to-image'
 
   useEffect(() => {
@@ -117,11 +120,17 @@ export function GapGenerationModal({
   const endFrameInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    setStartFrameEnabled(true)
-    setEndFrameEnabled(false)
+    if (isBlendMode) {
+      // Blend mode: both frames always enabled
+      setStartFrameEnabled(true)
+      setEndFrameEnabled(true)
+    } else {
+      setStartFrameEnabled(true)
+      setEndFrameEnabled(false)
+    }
     setStartFrameOverride(null)
     setEndFrameOverride(null)
-  }, [gapGenerateMode])
+  }, [gapGenerateMode, isBlendMode])
 
   const displayedBeforeFrame = startFrameOverride ?? gapBeforeFrame
   const displayedAfterFrame = endFrameOverride ?? gapAfterFrame
@@ -157,7 +166,9 @@ export function GapGenerationModal({
                 <div>
                   <h2 className="text-sm font-semibold text-white">{modalTitle}</h2>
                   <p className="text-[11px] text-zinc-500">
-                    Fill {(selectedGap.endTime - selectedGap.startTime).toFixed(1)}s gap on Track {selectedGap.trackIndex + 1}
+                    {isBlendMode
+                      ? `Regenerate ${(selectedGap.endTime - selectedGap.startTime).toFixed(1)}s transition`
+                      : `Fill ${(selectedGap.endTime - selectedGap.startTime).toFixed(1)}s gap on Track ${selectedGap.trackIndex + 1}`}
                   </p>
                 </div>
               </div>
@@ -175,12 +186,14 @@ export function GapGenerationModal({
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
                   <span className="text-xs text-zinc-400 font-medium">
-                    {isVideoMode ? 'Generate from' : 'Context frames'}
+                    {isBlendMode ? 'Blend frames' : isVideoMode ? 'Generate from' : 'Context frames'}
                   </span>
                   <div className="relative group/info">
                     <Info className="h-3 w-3 text-zinc-600 cursor-help" />
                     <div className="absolute left-0 top-full mt-2 w-60 p-2.5 bg-zinc-800 border border-zinc-700 rounded-lg text-[10px] text-zinc-300 leading-relaxed invisible group-hover/info:visible opacity-0 group-hover/info:opacity-100 transition-opacity pointer-events-none shadow-xl z-20">
-                      {isVideoMode ? (
+                      {isBlendMode ? (
+                        <p>The model will generate a video that transitions from the <strong className="text-white">first frame</strong> to the <strong className="text-white">last frame</strong>, creating a seamless blend between the two clips.</p>
+                      ) : isVideoMode ? (
                         <>
                           <p>Only one conditioning frame can be used at a time.</p>
                           <p className="mt-1.5">If <strong className="text-white">End frame</strong> is selected, it will be treated as the start frame, since the model does not currently support generating from an end frame. The video will then be generated from that frame and played in reverse.</p>
@@ -191,7 +204,8 @@ export function GapGenerationModal({
                     </div>
                   </div>
                 </div>
-                {/* Segmented toggle */}
+                {/* Segmented toggle — hidden in blend mode (both always on) */}
+                {!isBlendMode && (
                 <div className="flex bg-zinc-800 rounded-lg p-0.5 gap-0.5">
                   <button
                     onClick={() => { if (startFrameEnabled) { setStartFrameEnabled(false) } else { setStartFrameEnabled(true); setEndFrameEnabled(false) } }}
@@ -210,6 +224,7 @@ export function GapGenerationModal({
                     End frame
                   </button>
                 </div>
+                )}
               </div>
 
               {/* Frame strip */}
@@ -274,7 +289,7 @@ export function GapGenerationModal({
                       <div className="absolute inset-0 border border-dashed border-zinc-700" />
                       <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 px-3">
                         <Sparkles className="h-3.5 w-3.5 text-blue-400/40" />
-                        <span className="text-xs text-zinc-500 font-medium text-center">AI fills this gap</span>
+                        <span className="text-xs text-zinc-500 font-medium text-center">{isBlendMode ? 'AI blends transition' : 'AI fills this gap'}</span>
                       </div>
                     </div>
                   )}

@@ -4,7 +4,7 @@ import {
   ZoomIn, Film, Eye, FolderOpen, RotateCcw, Volume2, VolumeX,
   FlipHorizontal2, FlipVertical2, Link2, Unlink2,
   ChevronLeft, ChevronRight, Sparkles,
-  Video, Camera,
+  Video, Camera, Blend,
 } from 'lucide-react'
 import type { Asset, TimelineClip, Track, TextOverlayStyle } from '../../types/project'
 import { TEXT_PRESETS } from '../../types/project'
@@ -54,6 +54,7 @@ export interface ClipContextMenuProps {
   canUseIcLora: boolean
   onCaptureFrameForVideo: (clip: TimelineClip) => void
   onCreateVideoFromAudio: (clip: TimelineClip) => void
+  onBlendClips: (clip: TimelineClip) => void
 }
 
 // Reusable menu item component
@@ -133,6 +134,7 @@ export function ClipContextMenu({
   canUseIcLora,
   onCaptureFrameForVideo,
   onCreateVideoFromAudio,
+  onBlendClips,
 }: ClipContextMenuProps) {
   const close = () => setClipContextMenu(null)
   const isBackground = !contextClip
@@ -250,6 +252,7 @@ export function ClipContextMenu({
           canUseIcLora={canUseIcLora}
           onCaptureFrameForVideo={onCaptureFrameForVideo}
           onCreateVideoFromAudio={onCreateVideoFromAudio}
+          onBlendClips={onBlendClips}
           close={close}
         />
       ) : null}
@@ -282,6 +285,7 @@ function SingleClipMenu({
   setI2vClipId, setI2vPrompt, onRetakeClip, onICLoraClip, canUseIcLora,
   onCaptureFrameForVideo,
   onCreateVideoFromAudio,
+  onBlendClips,
   close,
 }: {
   contextClip: TimelineClip
@@ -315,6 +319,7 @@ function SingleClipMenu({
   canUseIcLora: boolean
   onCaptureFrameForVideo: (clip: TimelineClip) => void
   onCreateVideoFromAudio: (clip: TimelineClip) => void
+  onBlendClips: (clip: TimelineClip) => void
   close: () => void
 }) {
   const liveAsset = getLiveAsset(contextClip)
@@ -523,6 +528,20 @@ function SingleClipMenu({
             <>
               <MenuItem icon={Film} iconClass="text-blue-400" label="Retake Section"
                 onClick={() => { onRetakeClip(contextClip); close() }} />
+              {(() => {
+                // Show AI Blend if there's an adjacent video clip on the same track
+                const trackClips = clips
+                  .filter(c => c.trackIndex === contextClip.trackIndex && c.type === 'video' && c.id !== contextClip.id)
+                const clipEnd = contextClip.startTime + contextClip.duration
+                const hasAdjacentAfter = trackClips.some(c => Math.abs(c.startTime - clipEnd) < 0.1)
+                const hasAdjacentBefore = trackClips.some(c => Math.abs((c.startTime + c.duration) - contextClip.startTime) < 0.1)
+                if (!hasAdjacentAfter && !hasAdjacentBefore) return null
+                return (
+                  <MenuItem icon={Blend} iconClass="text-purple-400" label="AI Blend"
+                    disabled={isRegenerating}
+                    onClick={() => { onBlendClips(contextClip); close() }} />
+                )
+              })()}
               {canUseIcLora && (
                 <MenuItem icon={Sparkles} iconClass="text-amber-400" label="IC-LoRA / Style Transfer"
                   onClick={() => { onICLoraClip(contextClip); close() }} />
