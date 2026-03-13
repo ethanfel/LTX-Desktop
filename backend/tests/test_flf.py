@@ -97,10 +97,10 @@ class TestFLFGeneration:
         last = images[0]
         num_frames = call["num_frames"]
         assert last.frame_idx == (num_frames - 1) // 8
-        assert last.strength == 1.0  # default strength
+        assert last.strength == 0.8  # default strength
 
     def test_flf_default_strength(self, client, test_state, fake_services, create_fake_model_files, tmp_path):
-        """Last frame strength defaults to 1.0 when not specified."""
+        """Last frame strength defaults to 0.8 when not specified."""
         create_fake_model_files()
         _enable_local_text_encoding(test_state)
 
@@ -117,7 +117,7 @@ class TestFLFGeneration:
         assert r.status_code == 200
         pipeline = fake_services.fast_video_pipeline
         call = pipeline.generate_calls[0]
-        assert call["images"][0].strength == 1.0
+        assert call["images"][0].strength == 0.8
 
     def test_flf_invalid_last_frame_image(self, client, test_state, create_fake_model_files, tmp_path):
         """Invalid last frame image path returns 400."""

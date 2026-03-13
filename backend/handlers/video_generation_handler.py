@@ -182,7 +182,7 @@ class VideoGenerationHandler(StateHandlerBase):
         lora_path: str | None = None,
         lora_strength: float = 1.0,
         last_frame_image: Image.Image | None = None,
-        last_frame_strength: float = 1.0,
+        last_frame_strength: float = 0.8,
         model_type: VideoPipelineModelType = "fast",
     ) -> str:
         t_total_start = time.perf_counter()
