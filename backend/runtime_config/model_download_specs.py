@@ -60,11 +60,11 @@ DEFAULT_MODEL_DOWNLOAD_SPECS: dict[ModelFileType, ModelFileDownloadSpec] = {
         description="2x Upscaler",
     ),
     "distilled_lora": ModelFileDownloadSpec(
-        relative_path=Path("ltx-2-19b-distilled-lora-384.safetensors"),
+        relative_path=Path("ltx-2.3-22b-distilled-lora-384.safetensors"),
         expected_size_bytes=400_000_000,
         is_folder=False,
-        repo_id="Lightricks/LTX-2",
-        description="LoRA for Pro model",
+        repo_id="Lightricks/LTX-2.3",
+        description="Distilled LoRA for Pro/HQ pipelines",
     ),
     "ic_lora": ModelFileDownloadSpec(
         relative_path=Path("ltx-2.3-22b-ic-lora-union-control-ref0.5.safetensors"),
