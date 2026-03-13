@@ -20,6 +20,9 @@
 
   function rewriteFileUrl(url) {
     if (typeof url !== "string" || !url.startsWith("file://")) return url;
+    // If we have a cached blob URL for this file:// URL, prefer it (instant display
+    // while the background upload completes).
+    if (_blobUrlMap && _blobUrlMap[url]) return _blobUrlMap[url];
     // file:///data/foo/bar.mp4 → /data/foo/bar.mp4
     var fsPath = decodeURIComponent(url.slice(7));
     // Strip leading slash duplication (file:/// → /)
@@ -62,6 +65,60 @@
       value = rewriteFileUrl(value);
     }
     return origSetAttribute.call(this, name, value);
+  };
+
+  // =========================================================================
+  // URL.createObjectURL interceptor
+  //
+  // ImageUploader.tsx uses (file as any).path (Electron-only). In browsers,
+  // File.path is undefined so it falls back to URL.createObjectURL(file),
+  // producing a blob: URL. fileUrlToPath() can't convert blob: URLs, so i2v
+  // silently degrades to t2v. We intercept createObjectURL for File objects:
+  // upload the file in the background and return a file:// URL immediately.
+  // The DOM interceptor rewrites file:// to /api/files/serve/ for display.
+  // =========================================================================
+
+  var _origCreateObjectURL = URL.createObjectURL.bind(URL);
+  var _origRevokeObjectURL = URL.revokeObjectURL.bind(URL);
+
+  // Map from file:// URL to real blob URL (for revocation)
+  var _blobUrlMap = {};
+
+  URL.createObjectURL = function (obj) {
+    if (obj instanceof File && obj.size > 0) {
+      var safeName = (obj.name || "file").replace(/[/\\]/g, "_");
+      var uniqueName = Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 8) + "_" + safeName;
+      var serverPath = FILE_ROOT + "/uploads/" + uniqueName;
+      var fileUrl = "file://" + serverPath;
+
+      // Upload in background — by the time user clicks Generate, upload is done
+      var formData = new FormData();
+      formData.append("file", obj);
+      formData.append("path", serverPath);
+      fetch("/api/files/upload-binary", { method: "POST", body: formData })
+        .then(function (r) { return r.json(); })
+        .then(function (result) {
+          if (!result.success) console.error("[LTX Web] Background file upload failed:", result.error);
+        })
+        .catch(function (e) { console.error("[LTX Web] Background file upload error:", e); });
+
+      // Also create a real blob URL so the image preview works immediately
+      // (before upload completes). Store mapping for cleanup.
+      var realBlobUrl = _origCreateObjectURL(obj);
+      _blobUrlMap[fileUrl] = realBlobUrl;
+
+      return fileUrl;
+    }
+    return _origCreateObjectURL(obj);
+  };
+
+  URL.revokeObjectURL = function (url) {
+    if (_blobUrlMap[url]) {
+      _origRevokeObjectURL(_blobUrlMap[url]);
+      delete _blobUrlMap[url];
+    } else {
+      _origRevokeObjectURL(url);
+    }
   };
 
   // =========================================================================

@@ -17,7 +17,7 @@ Go to **Docker** tab → **Add Container** and fill in:
 | Field | Value |
 |-------|-------|
 | **Name** | `ltx-desktop` |
-| **Repository** | `ghcr.io/ethanfel/ltx-desktop-web:latest` |
+| **Repository** | `ghcr.io/ethanfel/ltx-desktop:latest` |
 | **Network Type** | `bridge` |
 
 ### 2. Port Mapping
