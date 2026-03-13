@@ -244,7 +244,7 @@ class VideoGenerationHandler(StateHandlerBase):
             width = round(width / 64) * 64
 
             t_inference_start = time.perf_counter()
-            if model_type in ("pro", "hq") and pipeline_state.pipeline.pipeline_kind in ("pro", "hq"):
+            if model_type in ("pro", "hq") and pipeline_state.pipeline.pipeline_kind == model_type:
                 neg = negative_prompt if negative_prompt else self.config.default_negative_prompt
                 steps = 15 if model_type == "hq" else 8
                 # Pro/HQ pipelines accept negative_prompt + num_inference_steps;
