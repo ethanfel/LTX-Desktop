@@ -813,6 +813,7 @@ class FakeRetakePipeline:
 
     def __init__(self) -> None:
         self.generate_calls: list[dict[str, Any]] = []
+        self.generate_lossless_calls: list[dict[str, Any]] = []
         self.raise_on_generate: Exception | None = None
 
     def generate(self, **kwargs: Any) -> None:
@@ -823,6 +824,15 @@ class FakeRetakePipeline:
         output_path = Path(kwargs["output_path"])
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_bytes(b"fake-retake-video")
+
+    def generate_lossless(self, **kwargs: Any) -> None:
+        self.generate_lossless_calls.append(kwargs)
+        if self.raise_on_generate is not None:
+            raise self.raise_on_generate
+
+        output_path = Path(kwargs["output_path"])
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_bytes(b"fake-retake-video-lossless")
 
 
 class FakeTextEncoder:

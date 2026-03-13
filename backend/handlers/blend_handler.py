@@ -77,6 +77,8 @@ class BlendHandler(StateHandlerBase):
 
         composite_path = None
         retake_output_path: str | None = None
+        lossless_a_path: str | None = None
+        lossless_b_path: str | None = None
         generation_started = False
 
         try:
@@ -88,12 +90,20 @@ class BlendHandler(StateHandlerBase):
         output_path = self.config.outputs_dir / f"blend_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{generation_id}.mp4"
 
         try:
+            # If PNG frames exist for the source videos, reconstruct lossless
+            # sources to avoid reading from lossy H264.
+            effective_a = str(video_a)
+            effective_b = str(video_b)
+            if self.state.app_settings.save_png_frames:
+                effective_a, lossless_a_path = self._maybe_lossless_from_pngs(str(video_a))
+                effective_b, lossless_b_path = self._maybe_lossless_from_pngs(str(video_b))
+
             # Step 1: Compose a temporary video using ffmpeg
             composite_path = self._compose_video(
-                video_a=str(video_a),
+                video_a=effective_a,
                 seek_a=seek_a,
                 context_a_frames=context_a_frames,
-                video_b=str(video_b),
+                video_b=effective_b,
                 seek_b=seek_b,
                 context_b_frames=context_b_frames,
                 gap_frames=gap_frames,
@@ -125,11 +135,11 @@ class BlendHandler(StateHandlerBase):
                 (None, None) if req.distilled else default_guiders()
             )
 
-            retake_output = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False)
+            retake_output = tempfile.NamedTemporaryFile(suffix=".mkv", delete=False)
             retake_output.close()
             retake_output_path = retake_output.name
 
-            pipeline_state.pipeline.generate(
+            pipeline_state.pipeline.generate_lossless(
                 video_path=composite_path,
                 prompt=req.prompt,
                 start_time=context_a_duration,
@@ -154,11 +164,13 @@ class BlendHandler(StateHandlerBase):
                 retake_output_path,
                 start_frame=context_a_frames,
                 num_frames=gap_frames,
-                start_time=context_a_duration,
-                duration=gap_duration,
+                fps=fps,
                 output_path=str(output_path),
             )
 
+            from services.ltx_pipeline_common import maybe_extract_pngs
+
+            maybe_extract_pngs(str(output_path), self.state.app_settings.save_png_frames)
             self._generation.update_progress("complete", 100, 1, 1)
             self._generation.complete_generation(str(output_path))
             return BlendResponse(status="complete", video_path=str(output_path))
@@ -179,6 +191,10 @@ class BlendHandler(StateHandlerBase):
                 Path(composite_path).unlink(missing_ok=True)
             if retake_output_path:
                 Path(retake_output_path).unlink(missing_ok=True)
+            if lossless_a_path:
+                Path(lossless_a_path).unlink(missing_ok=True)
+            if lossless_b_path:
+                Path(lossless_b_path).unlink(missing_ok=True)
 
     def _compose_video(
         self,
@@ -198,7 +214,7 @@ class BlendHandler(StateHandlerBase):
         Uses frame-accurate trim filters (not -ss/-t input options) to guarantee
         exact frame counts for the retake pipeline's 8k+1 constraint.
         """
-        tmp = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False)
+        tmp = tempfile.NamedTemporaryFile(suffix=".mkv", delete=False)
         tmp.close()
         composite_path = tmp.name
 
@@ -230,7 +246,7 @@ class BlendHandler(StateHandlerBase):
                 f"trim=end_frame={total_frames},setpts=PTS-STARTPTS[vout]"
             ),
             "-map", "[vout]",
-            "-c:v", "libx264", "-preset", "ultrafast", "-crf", "10",
+            "-c:v", "ffv1", "-pix_fmt", "yuv444p",
             "-r", str(fps),
             "-vsync", "cfr",
             "-an",  # No audio in composite (retake will generate it)
@@ -250,19 +266,43 @@ class BlendHandler(StateHandlerBase):
         video_path: str,
         start_frame: int,
         num_frames: int,
-        start_time: float,
-        duration: float,
+        fps: int,
         output_path: str,
     ) -> None:
-        """Extract the gap portion from the retake output using frame-accurate filters."""
+        """Extract the gap portion from the retake output using frame-accurate filters.
+
+        Audio timing is derived from exact frame boundaries to avoid sync drift.
+        """
         end_frame = start_frame + num_frames
+        # Compute audio boundaries from frame indices for exact sync
+        audio_start = start_frame / fps
+        audio_duration = num_frames / fps
+
+        # Probe whether the input has an audio stream
+        probe_cmd = [
+            "ffprobe", "-v", "error",
+            "-select_streams", "a",
+            "-show_entries", "stream=index",
+            "-of", "csv=p=0",
+            video_path,
+        ]
+        probe_result = subprocess.run(probe_cmd, capture_output=True, text=True, timeout=10)
+        has_audio = bool(probe_result.stdout.strip())
+
         cmd = [
             "ffmpeg", "-y",
             "-i", video_path,
             "-vf", f"select='between(n\\,{start_frame}\\,{end_frame - 1})',setpts=PTS-STARTPTS",
-            "-af", f"atrim=start={start_time}:duration={duration},asetpts=PTS-STARTPTS",
-            "-c:v", "libx264", "-preset", "fast", "-crf", "18",
-            "-c:a", "aac",
+        ]
+        if has_audio:
+            cmd += [
+                "-af", f"atrim=start={audio_start}:duration={audio_duration},asetpts=PTS-STARTPTS",
+                "-c:a", "aac",
+            ]
+        else:
+            cmd += ["-an"]
+        cmd += [
+            "-c:v", "libx264", "-preset", "fast", "-crf", "14",
             "-vsync", "cfr",
             output_path,
         ]
@@ -270,6 +310,27 @@ class BlendHandler(StateHandlerBase):
         if result.returncode != 0:
             logger.error("ffmpeg extract failed: %s", result.stderr)
             raise HTTPError(500, f"Failed to extract blend gap: {result.stderr[:500]}")
+
+    @staticmethod
+    def _maybe_lossless_from_pngs(video_path: str) -> tuple[str, str | None]:
+        """If a PNG frames dir exists for this video, reconstruct a lossless MKV.
+
+        Returns ``(effective_path, temp_path)`` where ``temp_path`` is the
+        lossless file to clean up (or ``None`` if no reconstruction was done).
+        """
+        from services.ltx_pipeline_common import png_dir_for_video, video_from_png_frames
+        from ltx_pipelines.utils.media_io import get_videostream_metadata
+
+        png_dir = png_dir_for_video(video_path)
+        if not Path(png_dir).is_dir() or not any(Path(png_dir).glob("frame_*.png")):
+            return video_path, None
+
+        src_fps, _, _, _ = get_videostream_metadata(video_path)
+        tmp = tempfile.NamedTemporaryFile(suffix=".mkv", delete=False)
+        tmp.close()
+        video_from_png_frames(png_dir, src_fps, tmp.name)
+        logger.info("Using lossless PNG source for %s: %s", video_path, tmp.name)
+        return tmp.name, tmp.name
 
     def _validate_composite(self, path: str) -> None:
         """Validate that the composite video meets retake constraints."""

@@ -26,6 +26,7 @@ export interface AppSettings {
   seedLocked: boolean
   lockedSeed: number
   modelsDir: string
+  savePngFrames: boolean
 }
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
@@ -44,6 +45,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   seedLocked: false,
   lockedSeed: 42,
   modelsDir: '',
+  savePngFrames: false,
 }
 
 type BackendProcessStatus = 'alive' | 'restarting' | 'dead'
@@ -92,6 +94,7 @@ function normalizeAppSettings(data: Partial<AppSettings>): AppSettings {
     seedLocked: data.seedLocked ?? DEFAULT_APP_SETTINGS.seedLocked,
     lockedSeed: data.lockedSeed ?? DEFAULT_APP_SETTINGS.lockedSeed,
     modelsDir: data.modelsDir ?? DEFAULT_APP_SETTINGS.modelsDir,
+    savePngFrames: data.savePngFrames ?? DEFAULT_APP_SETTINGS.savePngFrames,
   }
 }
 

@@ -75,6 +75,7 @@ class AppSettings(SettingsBaseModel):
     seed_locked: bool = False
     locked_seed: int = 42
     models_dir: str = ""
+    save_png_frames: bool = False
 
     @field_validator("prompt_cache_size", mode="before")
     @classmethod
@@ -147,6 +148,7 @@ class SettingsResponse(SettingsBaseModel):
     seed_locked: bool = False
     locked_seed: int = 42
     models_dir: str = ""
+    save_png_frames: bool = False
 
 
 def to_settings_response(settings: AppSettings) -> SettingsResponse:

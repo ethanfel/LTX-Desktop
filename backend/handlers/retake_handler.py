@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+import tempfile
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -20,6 +22,8 @@ from services.ltx_pipeline_common import default_guiders
 from services.interfaces import LTXAPIClient
 from state.app_state_types import AppState
 from state.app_settings import should_video_generate_with_ltx_api
+
+logger = logging.getLogger(__name__)
 
 
 class RetakeHandler(StateHandlerBase):
@@ -141,7 +145,27 @@ class RetakeHandler(StateHandlerBase):
         output_path = self.config.outputs_dir / f"retake_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{generation_id}.mp4"
         regenerate_video, regenerate_audio = self._resolve_retake_mode(mode)
 
+        lossless_source_path: str | None = None
         try:
+            # If PNG frames exist for the source video, reconstruct a lossless
+            # source so the retake pipeline reads from lossless frames instead
+            # of decoding the lossy H264 MP4.
+            effective_video_path = str(video_file)
+            if self.state.app_settings.save_png_frames:
+                from services.ltx_pipeline_common import png_dir_for_video
+
+                png_dir = png_dir_for_video(str(video_file))
+                if Path(png_dir).is_dir() and any(Path(png_dir).glob("frame_*.png")):
+                    from services.ltx_pipeline_common import video_from_png_frames
+                    from ltx_pipelines.utils.media_io import get_videostream_metadata
+
+                    src_fps, _, _, _ = get_videostream_metadata(str(video_file))
+                    tmp = tempfile.NamedTemporaryFile(suffix=".mkv", delete=False)
+                    tmp.close()
+                    lossless_source_path = tmp.name
+                    video_from_png_frames(png_dir, src_fps, lossless_source_path)
+                    effective_video_path = lossless_source_path
+
             pipeline_state = self._pipelines.load_retake_pipeline(distilled=distilled)
             self._generation.start_generation(generation_id)
             self._generation.update_progress("loading_model", 5, 0, 1)
@@ -152,7 +176,7 @@ class RetakeHandler(StateHandlerBase):
             )
 
             pipeline_state.pipeline.generate(
-                video_path=str(video_file),
+                video_path=effective_video_path,
                 prompt=prompt,
                 start_time=start_time,
                 end_time=end_time,
@@ -172,6 +196,7 @@ class RetakeHandler(StateHandlerBase):
                 output_path.unlink(missing_ok=True)
                 raise RuntimeError("Generation was cancelled")
 
+            self._maybe_extract_pngs(str(output_path))
             self._generation.update_progress("complete", 100, 1, 1)
             self._generation.complete_generation(str(output_path))
             return RetakeResponse(status="complete", video_path=str(output_path))
@@ -185,6 +210,8 @@ class RetakeHandler(StateHandlerBase):
             raise HTTPError(500, f"Generation error: {exc}") from exc
         finally:
             self._text.clear_api_embeddings()
+            if lossless_source_path:
+                Path(lossless_source_path).unlink(missing_ok=True)
 
     @staticmethod
     def _resolve_retake_mode(mode: str) -> tuple[bool, bool]:
@@ -201,6 +228,11 @@ class RetakeHandler(StateHandlerBase):
         if settings.seed_locked:
             return settings.locked_seed
         return int(time.time()) % 2147483647
+
+    def _maybe_extract_pngs(self, video_path: str) -> None:
+        from services.ltx_pipeline_common import maybe_extract_pngs
+
+        maybe_extract_pngs(video_path, self.state.app_settings.save_png_frames)
 
     @staticmethod
     def _validate_video_metadata(video_path: str) -> None:

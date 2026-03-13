@@ -27,7 +27,7 @@ from ltx_core.loader import LoraPathStrengthAndSDOps
 from ltx_core.model.video_vae import TilingConfig, get_video_chunks_number
 from ltx_core.quantization import QuantizationPolicy
 from ltx_core.types import Audio
-from ltx_pipelines.utils.media_io import encode_video, get_videostream_metadata
+from ltx_pipelines.utils.media_io import get_videostream_metadata
 
 from services.retake_pipeline.retake_pipeline import RetakePipeline
 from services.services_utils import sync_device
@@ -373,10 +373,60 @@ class LTXRetakePipeline:
         audio_out: Audio | None = audio
         tiling_config = TilingConfig.default()
         video_chunks = get_video_chunks_number(num_frames, tiling_config)
-        encode_video(
+        from services.ltx_pipeline_common import encode_video_output
+
+        encode_video_output(
             video=video_iter,
-            fps=int(fps),
             audio=audio_out,
+            fps=int(fps),
             output_path=output_path,
-            video_chunks_number=video_chunks,
+            video_chunks_number_value=int(video_chunks),
+        )
+
+    @torch.no_grad()
+    def generate_lossless(
+        self,
+        *,
+        video_path: str,
+        prompt: str,
+        start_time: float,
+        end_time: float,
+        seed: int,
+        output_path: str,
+        negative_prompt: str = "",
+        num_inference_steps: int = 40,
+        video_guider_params: MultiModalGuiderParams | None = None,
+        audio_guider_params: MultiModalGuiderParams | None = None,
+        regenerate_video: bool = True,
+        regenerate_audio: bool = True,
+        enhance_prompt: bool = False,
+        distilled: bool = True,
+    ) -> None:
+        fps, num_frames, _, _ = get_videostream_metadata(video_path)
+        video_iter, audio = self._run(
+            video_path=video_path,
+            prompt=prompt,
+            start_time=start_time,
+            end_time=end_time,
+            seed=seed,
+            negative_prompt=negative_prompt,
+            num_inference_steps=num_inference_steps,
+            video_guider_params=video_guider_params,
+            audio_guider_params=audio_guider_params,
+            regenerate_video=regenerate_video,
+            regenerate_audio=regenerate_audio,
+            enhance_prompt=enhance_prompt,
+            distilled=distilled,
+        )
+        audio_out: Audio | None = audio
+        tiling_config = TilingConfig.default()
+        video_chunks = get_video_chunks_number(num_frames, tiling_config)
+        from services.ltx_pipeline_common import encode_video_lossless
+
+        encode_video_lossless(
+            video=video_iter,
+            audio=audio_out,
+            fps=int(fps),
+            output_path=output_path,
+            video_chunks_number_value=int(video_chunks),
         )

@@ -12,5 +12,6 @@
     "steps": 20,
     "use_upscaler": true
   },
-  "prompt_cache_size": 100
+  "prompt_cache_size": 100,
+  "save_png_frames": false
 }

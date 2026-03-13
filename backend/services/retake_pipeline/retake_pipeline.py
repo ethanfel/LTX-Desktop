@@ -40,3 +40,22 @@ class RetakePipeline(Protocol):
         enhance_prompt: bool = False,
         distilled: bool = True,
     ) -> None: ...
+
+    def generate_lossless(
+        self,
+        *,
+        video_path: str,
+        prompt: str,
+        start_time: float,
+        end_time: float,
+        seed: int,
+        output_path: str,
+        negative_prompt: str = "",
+        num_inference_steps: int = 40,
+        video_guider_params: "MultiModalGuiderParams | None" = None,
+        audio_guider_params: "MultiModalGuiderParams | None" = None,
+        regenerate_video: bool = True,
+        regenerate_audio: bool = True,
+        enhance_prompt: bool = False,
+        distilled: bool = True,
+    ) -> None: ...

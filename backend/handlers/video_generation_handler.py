@@ -157,6 +157,7 @@ class VideoGenerationHandler(StateHandlerBase):
                 model_type=model_type,
             )
 
+            self._maybe_extract_pngs(output_path)
             self._generation.complete_generation(output_path)
             return GenerateVideoResponse(status="complete", video_path=output_path)
 
@@ -371,6 +372,7 @@ class VideoGenerationHandler(StateHandlerBase):
                     output_path.unlink()
                 raise RuntimeError("Generation was cancelled")
 
+            self._maybe_extract_pngs(str(output_path))
             self._generation.update_progress("complete", 100, total_steps, total_steps)
             self._generation.complete_generation(str(output_path))
             return GenerateVideoResponse(status="complete", video_path=str(output_path))
@@ -560,6 +562,7 @@ class VideoGenerationHandler(StateHandlerBase):
                 output_path.unlink(missing_ok=True)
                 raise RuntimeError("Generation was cancelled")
 
+            self._maybe_extract_pngs(str(output_path))
             self._generation.update_progress("complete", 100, None, None)
             self._generation.complete_generation(str(output_path))
             return GenerateVideoResponse(status="complete", video_path=str(output_path))
@@ -596,6 +599,12 @@ class VideoGenerationHandler(StateHandlerBase):
                     lora_files.append(str(path))
 
         return LoraListResponse(loras=lora_files)
+
+    def _maybe_extract_pngs(self, video_path: str) -> None:
+        """If save_png_frames is enabled, extract all frames as PNGs."""
+        from services.ltx_pipeline_common import maybe_extract_pngs
+
+        maybe_extract_pngs(video_path, self.state.app_settings.save_png_frames)
 
     @staticmethod
     def _parse_audio_flag(audio_value: str | bool) -> bool:
