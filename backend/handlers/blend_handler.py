@@ -61,6 +61,24 @@ class BlendHandler(StateHandlerBase):
         context_a_frames = max(1, round(req.context_a * fps))
         gap_frames = max(1, round(req.gap_duration * fps))
         context_b_frames = max(1, round(req.context_b * fps))
+
+        # Snap context frames to latent temporal boundaries so the
+        # TemporalRegionMask doesn't accidentally regenerate context
+        # frames.  The VAE uses 8x temporal compression with a causal
+        # first frame, giving pixel boundaries at 1, 9, 17, 25, …
+        # (i.e. 8k+1 for k≥0).  We round UP to the nearest boundary
+        # to ensure complete latent positions of context are preserved.
+        def _snap_to_latent_boundary(frames: int) -> int:
+            """Round frame count up to nearest latent boundary (1, 9, 17, 25, …)."""
+            if frames <= 1:
+                return 1
+            # Boundaries after frame 1 are at 8k+1: 9, 17, 25, 33, …
+            k = (frames - 2) // 8 + 1  # ceil((frames-1)/8)
+            return k * 8 + 1
+
+        context_a_frames = _snap_to_latent_boundary(context_a_frames)
+        context_b_frames = _snap_to_latent_boundary(context_b_frames)
+
         raw_total = context_a_frames + gap_frames + context_b_frames
         # Snap to 8k+1
         total_frames = ((raw_total - 1 + 7) // 8) * 8 + 1
