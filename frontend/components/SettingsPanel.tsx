@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { ChevronDown } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+import { ChevronDown, Download } from 'lucide-react'
 import { Select } from './ui/select'
 import type { GenerationMode } from './ModeTabs'
 import {
@@ -47,6 +47,57 @@ export function SettingsPanel({
 }: SettingsPanelProps) {
   const isImageMode = mode === 'text-to-image'
   const LOCAL_MAX_DURATION: Record<string, number> = { '540p': 20, '720p': 10, '1080p': 5 }
+
+  // Pro model download state
+  const [proModelsReady, setProModelsReady] = useState<boolean | null>(null)
+  const [proDownloading, setProDownloading] = useState(false)
+
+  const checkProModels = useCallback(() => {
+    if (forceApiGenerations) return
+    backendFetch('/api/models/status')
+      .then(async (res) => {
+        if (res.ok) {
+          const data = await res.json()
+          const models = data.models ?? []
+          const fullCk = models.find((m: { id: string }) => m.id === 'full_checkpoint')
+          const distLora = models.find((m: { id: string }) => m.id === 'distilled_lora')
+          setProModelsReady((fullCk?.downloaded ?? false) && (distLora?.downloaded ?? false))
+        }
+      })
+      .catch(() => { /* ignore */ })
+  }, [forceApiGenerations])
+
+  useEffect(() => {
+    if (settings.model === 'pro') checkProModels()
+  }, [settings.model, checkProModels])
+
+  const handleProDownload = () => {
+    setProDownloading(true)
+    backendFetch('/api/models/download', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ modelTypes: ['full_checkpoint', 'distilled_lora'] }),
+    })
+      .then(() => {
+        const poll = setInterval(async () => {
+          try {
+            const res = await backendFetch('/api/models/status')
+            if (res.ok) {
+              const data = await res.json()
+              const models = data.models ?? []
+              const fullCk = models.find((m: { id: string }) => m.id === 'full_checkpoint')
+              const distLora = models.find((m: { id: string }) => m.id === 'distilled_lora')
+              if ((fullCk?.downloaded ?? false) && (distLora?.downloaded ?? false)) {
+                clearInterval(poll)
+                setProModelsReady(true)
+                setProDownloading(false)
+              }
+            }
+          } catch { /* ignore */ }
+        }, 3000)
+      })
+      .catch(() => setProDownloading(false))
+  }
 
   const handleChange = (key: keyof GenerationSettings, value: string | number | boolean) => {
     const nextSettings = { ...settings, [key]: value } as GenerationSettings
@@ -134,6 +185,24 @@ export function SettingsPanel({
           <option value="fast" disabled={hasAudio}>LTX-2.3 Fast (API)</option>
           <option value="pro">LTX-2.3 Pro (API)</option>
         </Select>
+      )}
+
+      {/* Pro model download banner */}
+      {!forceApiGenerations && settings.model === 'pro' && proModelsReady === false && (
+        <div className="rounded-lg border border-amber-800/50 bg-amber-950/30 px-3 py-2.5 space-y-2">
+          <p className="text-[11px] text-amber-400">
+            Pro requires the full checkpoint (~43 GB) and distilled LoRA (~400 MB).
+          </p>
+          <button
+            type="button"
+            onClick={handleProDownload}
+            disabled={proDownloading}
+            className="flex items-center gap-1.5 rounded-md bg-amber-700 px-3 py-1.5 text-[11px] font-medium text-white hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            <Download className="h-3 w-3" />
+            {proDownloading ? 'Downloading...' : 'Download Pro Models'}
+          </button>
+        </div>
       )}
 
       {/* Duration, Resolution, FPS Row */}
