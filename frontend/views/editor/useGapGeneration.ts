@@ -53,7 +53,7 @@ export function useGapGeneration({
 }: UseGapGenerationParams) {
   // Gap selection and generation
   const [selectedGap, setSelectedGap] = useState<{ trackIndex: number; startTime: number; endTime: number } | null>(null)
-  const [gapGenerateMode, setGapGenerateMode] = useState<'text-to-video' | 'image-to-video' | 'text-to-image' | 'blend' | null>(null)
+  const [gapGenerateMode, setGapGenerateMode] = useState<'text-to-video' | 'image-to-video' | 'text-to-image' | 'blend' | 'extend' | null>(null)
   const gapGenerateModeRef = useRef(gapGenerateMode)
   gapGenerateModeRef.current = gapGenerateMode
   const [gapPrompt, setGapPrompt] = useState('')
@@ -81,7 +81,7 @@ export function useGapGeneration({
   // Tracks the gap currently being generated in the background (after modal closes)
   const [generatingGap, setGeneratingGap] = useState<{
     trackIndex: number; startTime: number; endTime: number
-    mode: 'text-to-video' | 'image-to-video' | 'text-to-image' | 'blend'
+    mode: 'text-to-video' | 'image-to-video' | 'text-to-image' | 'blend' | 'extend'
     prompt: string; settings: GenerationSettings
     imageFile: File | null; applyAudio: boolean
   } | null>(null)
@@ -229,6 +229,10 @@ export function useGapGeneration({
         const imagePath = gapBeforeFramePath || null
         const lastFramePath = gapAfterFramePath || null
         await regenGenerate(finalPrompt, imagePath, settings, null, lastFramePath)
+      } else if (mode === 'extend') {
+        // Extend mode: use before frame as first frame conditioning only
+        const imagePath = gapBeforeFramePath || null
+        await regenGenerate(finalPrompt, imagePath, settings, null, null)
       } else {
         // Convert File to filesystem path for the JSON-based generate API
         let imagePath: string | null = null
@@ -451,7 +455,7 @@ export function useGapGeneration({
 
       const framePromises: Promise<void>[] = []
       // Blend mode needs full-res frames for generation conditioning; other modes only need thumbnails for AI prompt suggestion
-      const extractWidth = mode === 'blend' ? undefined : 512
+      const extractWidth = (mode === 'blend' || mode === 'extend') ? undefined : 512
 
       if (clipBefore) {
         const clipSrc = resolveClipSrc(clipBefore)

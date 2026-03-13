@@ -13,7 +13,7 @@ interface TimelineGap {
   endTime: number
 }
 
-type GapGenerateMode = 'text-to-video' | 'image-to-video' | 'text-to-image' | 'blend'
+type GapGenerateMode = 'text-to-video' | 'image-to-video' | 'text-to-image' | 'blend' | 'extend'
 
 
 interface GapGenerationModalProps {
@@ -82,7 +82,8 @@ export function GapGenerationModal({
   if (!selectedGap) return null
 
   const isBlendMode = gapGenerateMode === 'blend'
-  const isVideoMode = gapGenerateMode === 'text-to-video' || gapGenerateMode === 'image-to-video' || isBlendMode
+  const isExtendMode = gapGenerateMode === 'extend'
+  const isVideoMode = gapGenerateMode === 'text-to-video' || gapGenerateMode === 'image-to-video' || isBlendMode || isExtendMode
   const isImageMode = gapGenerateMode === 'text-to-image'
 
   const gapImageUrl = useMemo(() => {
@@ -92,12 +93,14 @@ export function GapGenerationModal({
 
   const modalTitle = isBlendMode
     ? 'AI Blend'
+    : isExtendMode
+    ? 'Extend Clip'
     : isVideoMode
     ? (gapImageFile ? 'Image to Video' : 'Generate Video')
     : 'Generate Image'
 
   const settingsMode: GenerationMode = isVideoMode
-    ? (isBlendMode || gapImageFile ? 'image-to-video' : 'text-to-video')
+    ? (isBlendMode || isExtendMode || gapImageFile ? 'image-to-video' : 'text-to-video')
     : 'text-to-image'
 
   useEffect(() => {
@@ -128,13 +131,17 @@ export function GapGenerationModal({
       // Blend mode: both frames always enabled
       setStartFrameEnabled(true)
       setEndFrameEnabled(true)
+    } else if (isExtendMode) {
+      // Extend mode: start frame always enabled (it's the last frame of the source clip)
+      setStartFrameEnabled(true)
+      setEndFrameEnabled(false)
     } else {
       setStartFrameEnabled(true)
       setEndFrameEnabled(false)
     }
     setStartFrameOverride(null)
     setEndFrameOverride(null)
-  }, [gapGenerateMode, isBlendMode])
+  }, [gapGenerateMode, isBlendMode, isExtendMode])
 
   const displayedBeforeFrame = startFrameOverride ?? gapBeforeFrame
   const displayedAfterFrame = endFrameOverride ?? gapAfterFrame
@@ -172,6 +179,8 @@ export function GapGenerationModal({
                   <p className="text-[11px] text-zinc-500">
                     {isBlendMode
                       ? `Regenerate ${(selectedGap.endTime - selectedGap.startTime).toFixed(1)}s transition`
+                      : isExtendMode
+                      ? `Generate ${(selectedGap.endTime - selectedGap.startTime).toFixed(1)}s continuation`
                       : `Fill ${(selectedGap.endTime - selectedGap.startTime).toFixed(1)}s gap on Track ${selectedGap.trackIndex + 1}`}
                   </p>
                 </div>
@@ -190,13 +199,15 @@ export function GapGenerationModal({
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
                   <span className="text-xs text-zinc-400 font-medium">
-                    {isBlendMode ? 'Blend frames' : isVideoMode ? 'Generate from' : 'Context frames'}
+                    {isBlendMode ? 'Blend frames' : isExtendMode ? 'Continue from' : isVideoMode ? 'Generate from' : 'Context frames'}
                   </span>
                   <div className="relative group/info">
                     <Info className="h-3 w-3 text-zinc-600 cursor-help" />
                     <div className="absolute left-0 top-full mt-2 w-60 p-2.5 bg-zinc-800 border border-zinc-700 rounded-lg text-[10px] text-zinc-300 leading-relaxed invisible group-hover/info:visible opacity-0 group-hover/info:opacity-100 transition-opacity pointer-events-none shadow-xl z-20">
                       {isBlendMode ? (
                         <p>The model will generate a video that transitions from the <strong className="text-white">first frame</strong> to the <strong className="text-white">last frame</strong>, creating a seamless blend between the two clips.</p>
+                      ) : isExtendMode ? (
+                        <p>The model will generate a video continuation starting from the <strong className="text-white">last frame</strong> of the clip, extending the scene naturally.</p>
                       ) : isVideoMode ? (
                         <>
                           <p>Only one conditioning frame can be used at a time.</p>
@@ -209,7 +220,7 @@ export function GapGenerationModal({
                   </div>
                 </div>
                 {/* Segmented toggle — hidden in blend mode (both always on) */}
-                {!isBlendMode && (
+                {!isBlendMode && !isExtendMode && (
                 <div className="flex bg-zinc-800 rounded-lg p-0.5 gap-0.5">
                   <button
                     onClick={() => { if (startFrameEnabled) { setStartFrameEnabled(false) } else { setStartFrameEnabled(true); setEndFrameEnabled(false) } }}
@@ -236,8 +247,8 @@ export function GapGenerationModal({
                 {/* Before frame */}
                 {displayedBeforeFrame ? (
                   <div
-                    className={`relative w-[38%] h-full flex-shrink-0 overflow-hidden rounded-l-xl group/before ${isBlendMode ? '' : 'cursor-pointer'}`}
-                    onClick={() => { if (isBlendMode) return; if (startFrameEnabled) { setStartFrameEnabled(false) } else { setStartFrameEnabled(true); setEndFrameEnabled(false) } }}
+                    className={`relative w-[38%] h-full flex-shrink-0 overflow-hidden rounded-l-xl group/before ${isBlendMode || isExtendMode ? '' : 'cursor-pointer'}`}
+                    onClick={() => { if (isBlendMode || isExtendMode) return; if (startFrameEnabled) { setStartFrameEnabled(false) } else { setStartFrameEnabled(true); setEndFrameEnabled(false) } }}
                   >
                     <img
                       src={displayedBeforeFrame}
@@ -293,7 +304,7 @@ export function GapGenerationModal({
                       <div className="absolute inset-0 border border-dashed border-zinc-700" />
                       <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 px-3">
                         <Sparkles className="h-3.5 w-3.5 text-blue-400/40" />
-                        <span className="text-xs text-zinc-500 font-medium text-center">{isBlendMode ? 'AI blends transition' : 'AI fills this gap'}</span>
+                        <span className="text-xs text-zinc-500 font-medium text-center">{isBlendMode ? 'AI blends transition' : isExtendMode ? 'AI extends clip' : 'AI fills this gap'}</span>
                       </div>
                     </div>
                   )}
@@ -302,8 +313,8 @@ export function GapGenerationModal({
                 {/* After frame */}
                 {displayedAfterFrame ? (
                   <div
-                    className={`relative w-[38%] h-full flex-shrink-0 overflow-hidden rounded-r-xl group/after ${isBlendMode ? '' : 'cursor-pointer'}`}
-                    onClick={() => { if (isBlendMode) return; if (endFrameEnabled) { setEndFrameEnabled(false) } else { setEndFrameEnabled(true); setStartFrameEnabled(false) } }}
+                    className={`relative w-[38%] h-full flex-shrink-0 overflow-hidden rounded-r-xl group/after ${isBlendMode || isExtendMode ? '' : 'cursor-pointer'}`}
+                    onClick={() => { if (isBlendMode || isExtendMode) return; if (endFrameEnabled) { setEndFrameEnabled(false) } else { setEndFrameEnabled(true); setStartFrameEnabled(false) } }}
                   >
                     <img
                       src={displayedAfterFrame}

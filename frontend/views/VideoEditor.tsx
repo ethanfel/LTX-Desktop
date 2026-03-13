@@ -1588,6 +1588,39 @@ export function VideoEditor() {
     setGapGenerateMode('blend')
   }, [clips, blendOverlap, pushUndo, setClips, setSelectedGap, setGapGenerateMode, setGapImageFile, setBlendInfo, setGapSettings])
 
+  const handleExtendClip = useCallback((clip: TimelineClip) => {
+    if (clip.type !== 'video') return
+
+    const extendDuration = gapSettings.duration || 5
+    const clipEnd = clip.startTime + clip.duration
+
+    pushUndo()
+
+    // Ripple-shift all clips that start at or after the clip end to make room
+    setClips(prev => prev.map(c => {
+      if (c.id === clip.id) return c
+      if (c.startTime >= clipEnd - 0.05) {
+        return { ...c, startTime: c.startTime + extendDuration }
+      }
+      return c
+    }))
+
+    // Match settings to source clip quality
+    const sourceResolution = clip.asset?.resolution || '1080p'
+    const sourceAspectRatio = clip.asset?.generationParams?.imageAspectRatio
+    setGapImageFile(null)
+    setGapSettings(prev => ({
+      ...prev,
+      model: 'pro',
+      videoResolution: sourceResolution,
+      ...(sourceAspectRatio ? { aspectRatio: sourceAspectRatio } : {}),
+    }))
+
+    // Open gap generation in extend mode at the newly created gap
+    setSelectedGap({ trackIndex: clip.trackIndex, startTime: clipEnd, endTime: clipEnd + extendDuration })
+    setGapGenerateMode('extend')
+  }, [gapSettings.duration, pushUndo, setClips, setSelectedGap, setGapGenerateMode, setGapImageFile, setGapSettings])
+
   const handleRetakeClip = useCallback((clip: TimelineClip) => {
     const liveAsset = getLiveAsset(clip)
     if (!liveAsset) return
@@ -4186,6 +4219,7 @@ export function VideoEditor() {
             onCaptureFrameForVideo={handleCaptureFrameForVideo}
             onCreateVideoFromAudio={handleCreateVideoFromAudio}
             onBlendClips={handleBlendClips}
+            onExtendClip={handleExtendClip}
           />
         )
       })()}

@@ -4,7 +4,7 @@ import {
   ZoomIn, Film, Eye, FolderOpen, RotateCcw, Volume2, VolumeX,
   FlipHorizontal2, FlipVertical2, Link2, Unlink2,
   ChevronLeft, ChevronRight, Sparkles,
-  Video, Camera, Blend,
+  Video, Camera, Blend, ArrowRight,
 } from 'lucide-react'
 import type { Asset, TimelineClip, Track, TextOverlayStyle } from '../../types/project'
 import { TEXT_PRESETS } from '../../types/project'
@@ -55,6 +55,7 @@ export interface ClipContextMenuProps {
   onCaptureFrameForVideo: (clip: TimelineClip) => void
   onCreateVideoFromAudio: (clip: TimelineClip) => void
   onBlendClips: (clip: TimelineClip) => void
+  onExtendClip: (clip: TimelineClip) => void
 }
 
 // Reusable menu item component
@@ -135,6 +136,7 @@ export function ClipContextMenu({
   onCaptureFrameForVideo,
   onCreateVideoFromAudio,
   onBlendClips,
+  onExtendClip,
 }: ClipContextMenuProps) {
   const close = () => setClipContextMenu(null)
   const isBackground = !contextClip
@@ -253,6 +255,7 @@ export function ClipContextMenu({
           onCaptureFrameForVideo={onCaptureFrameForVideo}
           onCreateVideoFromAudio={onCreateVideoFromAudio}
           onBlendClips={onBlendClips}
+          onExtendClip={onExtendClip}
           close={close}
         />
       ) : null}
@@ -286,6 +289,7 @@ function SingleClipMenu({
   onCaptureFrameForVideo,
   onCreateVideoFromAudio,
   onBlendClips,
+  onExtendClip,
   close,
 }: {
   contextClip: TimelineClip
@@ -320,6 +324,7 @@ function SingleClipMenu({
   onCaptureFrameForVideo: (clip: TimelineClip) => void
   onCreateVideoFromAudio: (clip: TimelineClip) => void
   onBlendClips: (clip: TimelineClip) => void
+  onExtendClip: (clip: TimelineClip) => void
   close: () => void
 }) {
   const liveAsset = getLiveAsset(contextClip)
@@ -546,6 +551,9 @@ function SingleClipMenu({
                     onClick={() => { onBlendClips(contextClip); close() }} />
                 )
               })()}
+              <MenuItem icon={ArrowRight} iconClass="text-green-400" label="Extend Clip"
+                disabled={isRegenerating}
+                onClick={() => { onExtendClip(contextClip); close() }} />
               {canUseIcLora && (
                 <MenuItem icon={Sparkles} iconClass="text-amber-400" label="IC-LoRA / Style Transfer"
                   onClick={() => { onICLoraClip(contextClip); close() }} />

@@ -30,7 +30,7 @@ interface KeyboardRefs {
   sourceTimeRef: React.MutableRefObject<number>
   centerOnPlayheadRef: React.MutableRefObject<boolean>
   getMinZoomRef: React.MutableRefObject<() => number>
-  gapGenerateModeRef: React.MutableRefObject<'text-to-video' | 'image-to-video' | 'text-to-image' | 'blend' | null>
+  gapGenerateModeRef: React.MutableRefObject<'text-to-video' | 'image-to-video' | 'text-to-image' | 'blend' | 'extend' | null>
   undoRef: React.MutableRefObject<() => void>
   redoRef: React.MutableRefObject<() => void>
   copyRef: React.MutableRefObject<() => void>
@@ -62,7 +62,7 @@ interface KeyboardSetters {
   clearInOut: () => void
   setZoom: React.Dispatch<React.SetStateAction<number>>
   setSnapEnabled: React.Dispatch<React.SetStateAction<boolean>>
-  setGapGenerateMode: React.Dispatch<React.SetStateAction<'text-to-video' | 'image-to-video' | 'text-to-image' | 'blend' | null>>
+  setGapGenerateMode: React.Dispatch<React.SetStateAction<'text-to-video' | 'image-to-video' | 'text-to-image' | 'blend' | 'extend' | null>>
   setSelectedGap: (v: any) => void
   setSelectedAssetIds: React.Dispatch<React.SetStateAction<Set<string>>>
 }

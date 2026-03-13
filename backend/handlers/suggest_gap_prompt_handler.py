@@ -89,10 +89,23 @@ class SuggestGapPromptHandler(StateHandlerBase):
         is_image_gen = mode in ("text-to-image", "t2i")
         is_image_to_video = mode in ("image-to-video", "i2v")
         is_blend = mode == "blend"
-        if not is_image_to_video and not is_blend:
+        is_extend = mode == "extend"
+        if not is_image_to_video and not is_blend and not is_extend:
             input_image = None
 
-        if is_blend:
+        if is_extend:
+            system_text = (
+                "You are a video production assistant. The user wants to extend a video clip by generating "
+                f"{gap_duration:.1f} seconds of additional footage that continues naturally from the last frame. "
+                "The AI model will be conditioned on the last frame of the clip as its starting point.\n\n"
+                "Guidelines:\n"
+                "- Describe what happens NEXT in the scene — continuing the action, camera motion, and narrative\n"
+                "- Maintain visual continuity: same style, lighting, color palette, and mood\n"
+                "- Focus on natural progression of the existing scene\n"
+                "- Keep the prompt concise (1-3 sentences)\n"
+                "- Write only the prompt text, no explanations or labels\n"
+            )
+        elif is_blend:
             system_text = (
                 "You are a video production assistant. The user wants to create a seamless AI-generated "
                 f"transition of {gap_duration:.1f} seconds between two adjacent video clips. The AI model "
@@ -124,7 +137,12 @@ class SuggestGapPromptHandler(StateHandlerBase):
 
         context_text = "Here is the context from the timeline:\n\n"
         if before_frame or before_prompt:
-            context_text += "SHOT BEFORE THE GAP (clip A):\n" if is_blend else "SHOT BEFORE THE GAP:\n"
+            if is_extend:
+                context_text += "CLIP TO EXTEND:\n"
+            elif is_blend:
+                context_text += "SHOT BEFORE THE GAP (clip A):\n"
+            else:
+                context_text += "SHOT BEFORE THE GAP:\n"
             if before_prompt:
                 context_text += f"  Prompt: {before_prompt}\n"
             if before_frame:
@@ -137,8 +155,10 @@ class SuggestGapPromptHandler(StateHandlerBase):
             if after_frame:
                 context_text += "  First frame (see image below):\n"
 
-        context_text += f"\nGap duration: {gap_duration:.1f} seconds\n"
-        if is_blend:
+        context_text += f"\nExtend duration: {gap_duration:.1f} seconds\n" if is_extend else f"\nGap duration: {gap_duration:.1f} seconds\n"
+        if is_extend:
+            mode_label = "clip extension (first frame conditioned)"
+        elif is_blend:
             mode_label = "AI blend transition (first+last frame conditioned)"
         elif is_image_gen:
             mode_label = "image generation"
@@ -149,7 +169,9 @@ class SuggestGapPromptHandler(StateHandlerBase):
         context_text += f"Generation mode: {mode_label}\n"
         if input_image:
             context_text += "A reference image is provided to guide the start of the shot.\n"
-        if is_blend:
+        if is_extend:
+            context_text += "\nPlease suggest a prompt describing what happens next in this scene."
+        elif is_blend:
             context_text += "\nPlease suggest a prompt describing the smooth visual transition between these two frames."
         else:
             context_text += "\nPlease suggest a detailed prompt for generating " + ("an image" if is_image_gen else "a video clip") + " to fill this gap."
