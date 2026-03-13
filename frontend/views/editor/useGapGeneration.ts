@@ -475,7 +475,8 @@ export function useGapGeneration({
         }
       }
 
-      if (clipAfter) {
+      // Extend mode only uses the before frame — skip after-frame extraction
+      if (clipAfter && mode !== 'extend') {
         const clipSrc = resolveClipSrc(clipAfter)
         afterPrompt = clipAfter.asset?.prompt || ''
         if (clipSrc) {

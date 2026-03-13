@@ -1576,8 +1576,10 @@ export function VideoEditor() {
     const gapEnd = gapStart + gapDuration
     setGapImageFile(null)
     // Match blend settings to source clip quality: pro model, source resolution
-    const sourceResolution = clipA.asset?.resolution || clipB.asset?.resolution || '1080p'
-    const sourceAspectRatio = clipA.asset?.generationParams?.imageAspectRatio || clipB.asset?.generationParams?.imageAspectRatio
+    const liveA = getLiveAsset(clipA)
+    const liveB = getLiveAsset(clipB)
+    const sourceResolution = liveA?.resolution || liveB?.resolution || '1080p'
+    const sourceAspectRatio = liveA?.generationParams?.imageAspectRatio || liveB?.generationParams?.imageAspectRatio
     setGapSettings(prev => ({
       ...prev,
       model: 'pro',
@@ -1586,7 +1588,7 @@ export function VideoEditor() {
     }))
     setSelectedGap({ trackIndex: clip.trackIndex, startTime: gapStart, endTime: gapEnd })
     setGapGenerateMode('blend')
-  }, [clips, blendOverlap, pushUndo, setClips, setSelectedGap, setGapGenerateMode, setGapImageFile, setBlendInfo, setGapSettings])
+  }, [clips, blendOverlap, pushUndo, setClips, setSelectedGap, setGapGenerateMode, setGapImageFile, setBlendInfo, setGapSettings, getLiveAsset])
 
   const handleExtendClip = useCallback((clip: TimelineClip) => {
     if (clip.type !== 'video') return
@@ -1596,18 +1598,30 @@ export function VideoEditor() {
 
     pushUndo()
 
+    // Collect IDs of the source clip and its linked clips so they aren't shifted
+    const sourceIds = new Set([clip.id, ...(clip.linkedClipIds ?? [])])
+
     // Ripple-shift all clips that start at or after the clip end to make room
     setClips(prev => prev.map(c => {
-      if (c.id === clip.id) return c
+      if (sourceIds.has(c.id)) return c
       if (c.startTime >= clipEnd - 0.05) {
         return { ...c, startTime: c.startTime + extendDuration }
       }
       return c
     }))
 
+    // Also shift subtitles
+    setSubtitles(prev => prev.map(s => {
+      if (s.startTime >= clipEnd - 0.05) {
+        return { ...s, startTime: s.startTime + extendDuration, endTime: s.endTime + extendDuration }
+      }
+      return s
+    }))
+
     // Match settings to source clip quality
-    const sourceResolution = clip.asset?.resolution || '1080p'
-    const sourceAspectRatio = clip.asset?.generationParams?.imageAspectRatio
+    const liveAsset = getLiveAsset(clip)
+    const sourceResolution = liveAsset?.resolution || '1080p'
+    const sourceAspectRatio = liveAsset?.generationParams?.imageAspectRatio
     setGapImageFile(null)
     setGapSettings(prev => ({
       ...prev,
@@ -1619,7 +1633,7 @@ export function VideoEditor() {
     // Open gap generation in extend mode at the newly created gap
     setSelectedGap({ trackIndex: clip.trackIndex, startTime: clipEnd, endTime: clipEnd + extendDuration })
     setGapGenerateMode('extend')
-  }, [gapSettings.duration, pushUndo, setClips, setSelectedGap, setGapGenerateMode, setGapImageFile, setGapSettings])
+  }, [gapSettings.duration, pushUndo, setClips, setSubtitles, setSelectedGap, setGapGenerateMode, setGapImageFile, setGapSettings, getLiveAsset])
 
   const handleRetakeClip = useCallback((clip: TimelineClip) => {
     const liveAsset = getLiveAsset(clip)

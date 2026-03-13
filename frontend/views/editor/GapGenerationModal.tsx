@@ -310,11 +310,11 @@ export function GapGenerationModal({
                   )}
                 </div>
 
-                {/* After frame */}
-                {displayedAfterFrame ? (
+                {/* After frame — hidden in extend mode */}
+                {isExtendMode ? null : displayedAfterFrame ? (
                   <div
-                    className={`relative w-[38%] h-full flex-shrink-0 overflow-hidden rounded-r-xl group/after ${isBlendMode || isExtendMode ? '' : 'cursor-pointer'}`}
-                    onClick={() => { if (isBlendMode || isExtendMode) return; if (endFrameEnabled) { setEndFrameEnabled(false) } else { setEndFrameEnabled(true); setStartFrameEnabled(false) } }}
+                    className={`relative w-[38%] h-full flex-shrink-0 overflow-hidden rounded-r-xl group/after ${isBlendMode ? '' : 'cursor-pointer'}`}
+                    onClick={() => { if (isBlendMode) return; if (endFrameEnabled) { setEndFrameEnabled(false) } else { setEndFrameEnabled(true); setStartFrameEnabled(false) } }}
                   >
                     <img
                       src={displayedAfterFrame}
