@@ -92,16 +92,27 @@ class BlendHandler(StateHandlerBase):
             composite_path = self._compose_video(
                 video_a=str(video_a),
                 seek_a=seek_a,
-                duration_a=context_a_duration,
+                context_a_frames=context_a_frames,
                 video_b=str(video_b),
                 seek_b=seek_b,
-                duration_b=context_b_duration,
+                context_b_frames=context_b_frames,
                 gap_frames=gap_frames,
+                total_frames=total_frames,
                 fps=fps,
             )
 
             # Step 2: Validate composite meets retake constraints
             self._validate_composite(composite_path)
+            logger.info(
+                "Blend timing: context_a=%d frames (%.2fs), gap=%d frames (%.2fs), "
+                "context_b=%d frames (%.2fs), total=%d frames, "
+                "retake window=[%.3f, %.3f]s",
+                context_a_frames, context_a_duration,
+                gap_frames, gap_duration,
+                context_b_frames, context_b_duration,
+                total_frames,
+                context_a_duration, context_a_duration + gap_duration,
+            )
 
             # Step 3: Run retake on the composite
             pipeline_state = self._pipelines.load_retake_pipeline(distilled=req.distilled)
@@ -141,6 +152,8 @@ class BlendHandler(StateHandlerBase):
             # Step 4: Extract just the gap portion from the retake output
             self._extract_gap(
                 retake_output_path,
+                start_frame=context_a_frames,
+                num_frames=gap_frames,
                 start_time=context_a_duration,
                 duration=gap_duration,
                 output_path=str(output_path),
@@ -172,44 +185,54 @@ class BlendHandler(StateHandlerBase):
         *,
         video_a: str,
         seek_a: float,
-        duration_a: float,
+        context_a_frames: int,
         video_b: str,
         seek_b: float,
-        duration_b: float,
+        context_b_frames: int,
         gap_frames: int,
+        total_frames: int,
         fps: int,
     ) -> str:
-        """Create a composite video: end of clip A + frozen last frame as gap + start of clip B."""
+        """Create a composite video: end of clip A + frozen last frame as gap + start of clip B.
+
+        Uses frame-accurate trim filters (not -ss/-t input options) to guarantee
+        exact frame counts for the retake pipeline's 8k+1 constraint.
+        """
         tmp = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False)
         tmp.close()
         composite_path = tmp.name
 
-        # Use ffmpeg complex filter to:
-        # 1. Extract end of clip A
-        # 2. Freeze last frame of clip A for gap_frames
-        # 3. Extract start of clip B
-        # 4. Concatenate all three
+        # Use trim filters in the filtergraph for frame-accurate control.
+        # Input -ss is only a coarse seek hint; the trim filter does the real work.
+        # We overshoot the input read window to ensure enough frames are available.
+        read_margin = 2.0  # extra seconds to read from each source
+        duration_a = context_a_frames / fps
+        duration_b = context_b_frames / fps
 
-        # Build ffmpeg command with complex filtergraph
         cmd = [
             "ffmpeg", "-y",
-            "-ss", str(seek_a), "-t", str(duration_a), "-i", video_a,
-            "-ss", str(seek_b), "-t", str(duration_b), "-i", video_b,
+            "-ss", str(max(0, seek_a - read_margin)), "-i", video_a,
+            "-ss", str(max(0, seek_b - read_margin)), "-i", video_b,
             "-filter_complex",
             (
-                # Trim clip A segment
-                f"[0:v]fps={fps},setpts=PTS-STARTPTS[va];"
-                # Get last frame of clip A and loop it for gap duration
-                f"[0:v]fps={fps},trim=start={duration_a - 1.0/fps},setpts=PTS-STARTPTS[lastframe];"
+                # Trim clip A: seek to the right position, convert fps, take exact frame count
+                f"[0:v]fps={fps},setpts=PTS-STARTPTS,"
+                f"trim=start={read_margin}:end={read_margin + duration_a},setpts=PTS-STARTPTS[va];"
+                # Get last frame of clip A and loop for gap
+                f"[0:v]fps={fps},setpts=PTS-STARTPTS,"
+                f"trim=start={read_margin + duration_a - 1.0/fps},setpts=PTS-STARTPTS[lastframe];"
                 f"[lastframe]loop=loop={gap_frames - 1}:size=1:start=0,setpts=N/{fps}/TB[vgap];"
-                # Trim clip B segment
-                f"[1:v]fps={fps},setpts=PTS-STARTPTS[vb];"
-                # Concatenate
-                "[va][vgap][vb]concat=n=3:v=1:a=0[vout]"
+                # Trim clip B: take exact frame count
+                f"[1:v]fps={fps},setpts=PTS-STARTPTS,"
+                f"trim=start={read_margin}:end={read_margin + duration_b},setpts=PTS-STARTPTS[vb];"
+                # Concatenate and limit to exact total frame count
+                f"[va][vgap][vb]concat=n=3:v=1:a=0,"
+                f"trim=end_frame={total_frames},setpts=PTS-STARTPTS[vout]"
             ),
             "-map", "[vout]",
             "-c:v", "libx264", "-preset", "ultrafast", "-crf", "10",
             "-r", str(fps),
+            "-vsync", "cfr",
             "-an",  # No audio in composite (retake will generate it)
             composite_path,
         ]
@@ -225,18 +248,22 @@ class BlendHandler(StateHandlerBase):
     def _extract_gap(
         self,
         video_path: str,
+        start_frame: int,
+        num_frames: int,
         start_time: float,
         duration: float,
         output_path: str,
     ) -> None:
-        """Extract the gap portion from the retake output."""
+        """Extract the gap portion from the retake output using frame-accurate filters."""
+        end_frame = start_frame + num_frames
         cmd = [
             "ffmpeg", "-y",
-            "-ss", str(start_time),
             "-i", video_path,
-            "-t", str(duration),
+            "-vf", f"select='between(n\\,{start_frame}\\,{end_frame - 1})',setpts=PTS-STARTPTS",
+            "-af", f"atrim=start={start_time}:duration={duration},asetpts=PTS-STARTPTS",
             "-c:v", "libx264", "-preset", "fast", "-crf", "18",
             "-c:a", "aac",
+            "-vsync", "cfr",
             output_path,
         ]
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
