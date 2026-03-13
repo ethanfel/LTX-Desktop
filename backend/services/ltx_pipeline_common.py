@@ -22,9 +22,26 @@ def default_tiling_config() -> TilingConfigType:
 
 
 def default_guiders() -> tuple[MultiModalGuiderParams, MultiModalGuiderParams]:
+    """Guider params matching upstream LTX_2_3_PARAMS."""
     from ltx_core.components.guiders import MultiModalGuiderParams
 
-    return MultiModalGuiderParams(cfg_scale=3.0), MultiModalGuiderParams(cfg_scale=3.0)
+    video = MultiModalGuiderParams(
+        cfg_scale=3.0,
+        stg_scale=1.0,
+        rescale_scale=0.7,
+        modality_scale=3.0,
+        skip_step=0,
+        stg_blocks=[28],
+    )
+    audio = MultiModalGuiderParams(
+        cfg_scale=7.0,
+        stg_scale=1.0,
+        rescale_scale=0.7,
+        modality_scale=3.0,
+        skip_step=0,
+        stg_blocks=[28],
+    )
+    return video, audio
 
 
 def video_chunks_number(num_frames: int, tiling_config: TilingConfigType | None) -> int:

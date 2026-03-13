@@ -246,7 +246,7 @@ class VideoGenerationHandler(StateHandlerBase):
             t_inference_start = time.perf_counter()
             if model_type in ("pro", "hq") and pipeline_state.pipeline.pipeline_kind == model_type:
                 neg = negative_prompt if negative_prompt else self.config.default_negative_prompt
-                steps = 15 if model_type == "hq" else 8
+                steps = 15 if model_type == "hq" else settings.pro_model.steps
                 # Pro/HQ pipelines accept negative_prompt + num_inference_steps;
                 # pyright can't narrow the union via pipeline_kind, so use Any.
                 cast(Any, pipeline_state.pipeline).generate(
