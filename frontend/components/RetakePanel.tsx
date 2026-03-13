@@ -11,6 +11,8 @@ interface RetakePanelProps {
   isProcessing?: boolean
   processingStatus?: string
   fillHeight?: boolean
+  distilled?: boolean
+  onDistilledChange?: (distilled: boolean) => void
   onChange?: (data: {
     videoUrl: string | null
     videoPath: string | null
@@ -42,6 +44,8 @@ export function RetakePanel({
   isProcessing = false,
   processingStatus = '',
   fillHeight = false,
+  distilled = true,
+  onDistilledChange,
   onChange,
 }: RetakePanelProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -594,6 +598,39 @@ export function RetakePanel({
                 <span className="text-[10px] font-mono text-zinc-500">Duration: {formatTimecode(selDuration)}</span>
                 <span className="text-[10px] font-mono text-blue-400">{formatTimecode(selEnd)}</span>
               </div>
+            </div>
+
+            <div className="px-4 pb-3">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-medium text-zinc-400">Quality</label>
+                <div className="flex rounded-md overflow-hidden border border-zinc-700">
+                  <button
+                    type="button"
+                    onClick={() => onDistilledChange?.(true)}
+                    className={`px-3 py-1 text-xs font-medium transition-colors ${
+                      distilled
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-zinc-800 text-zinc-400 hover:text-white'
+                    }`}
+                  >
+                    Fast
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onDistilledChange?.(false)}
+                    className={`px-3 py-1 text-xs font-medium transition-colors ${
+                      !distilled
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-zinc-800 text-zinc-400 hover:text-white'
+                    }`}
+                  >
+                    Quality
+                  </button>
+                </div>
+              </div>
+              <p className="text-[10px] text-zinc-500 mt-1">
+                {distilled ? 'Fast generation using distilled model' : 'Higher quality using full pipeline (slower)'}
+              </p>
             </div>
 
             {isProcessing && (

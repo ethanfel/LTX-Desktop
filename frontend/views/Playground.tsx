@@ -116,6 +116,7 @@ export function Playground() {
     ready: false,
   })
   const [retakePanelKey, setRetakePanelKey] = useState(0)
+  const [retakeDistilled, setRetakeDistilled] = useState(true)
   const [icLoraInput, setIcLoraInput] = useState({
     videoUrl: null as string | null,
     videoPath: null as string | null,
@@ -150,6 +151,7 @@ export function Playground() {
         duration: retakeInput.duration,
         prompt,
         mode: 'replace_audio_and_video',
+        distilled: retakeDistilled,
       })
       return
     }
@@ -201,6 +203,7 @@ export function Playground() {
       ready: false,
     })
     setRetakePanelKey((prev) => prev + 1)
+    setRetakeDistilled(true)
     setIcLoraInput({
       videoUrl: null,
       videoPath: null,
@@ -291,6 +294,8 @@ export function Playground() {
                 resetKey={retakePanelKey}
                 isProcessing={isRetaking}
                 processingStatus={retakeStatus}
+                distilled={retakeDistilled}
+                onDistilledChange={setRetakeDistilled}
                 onChange={(data) => setRetakeInput(data)}
               />
             )}

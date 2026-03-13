@@ -16,6 +16,7 @@ from handlers.pipelines_handler import PipelinesHandler
 from handlers.text_handler import TextHandler
 from runtime_config.runtime_config import RuntimeConfig
 from services.ltx_api_client.ltx_api_client import LTXAPIClientError
+from services.ltx_pipeline_common import default_guiders
 from services.interfaces import LTXAPIClient
 from state.app_state_types import AppState
 from state.app_settings import should_video_generate_with_ltx_api
@@ -72,6 +73,7 @@ class RetakeHandler(StateHandlerBase):
             duration=duration,
             prompt=prompt,
             mode=mode,
+            distilled=req.distilled,
         )
 
     def _run_api_retake(
@@ -118,6 +120,7 @@ class RetakeHandler(StateHandlerBase):
         duration: float,
         prompt: str,
         mode: str,
+        distilled: bool = True,
     ) -> RetakeResponse:
         if self._generation.is_generation_running():
             raise HTTPError(409, "Generation already in progress")
@@ -139,10 +142,14 @@ class RetakeHandler(StateHandlerBase):
         regenerate_video, regenerate_audio = self._resolve_retake_mode(mode)
 
         try:
-            pipeline_state = self._pipelines.load_retake_pipeline(distilled=True)
+            pipeline_state = self._pipelines.load_retake_pipeline(distilled=distilled)
             self._generation.start_generation(generation_id)
             self._generation.update_progress("loading_model", 5, 0, 1)
             self._generation.update_progress("inference", 15, 0, 1)
+
+            video_guider_params, audio_guider_params = (
+                (None, None) if distilled else default_guiders()
+            )
 
             pipeline_state.pipeline.generate(
                 video_path=str(video_file),
@@ -153,12 +160,12 @@ class RetakeHandler(StateHandlerBase):
                 output_path=str(output_path),
                 negative_prompt=self.config.default_negative_prompt,
                 num_inference_steps=40,
-                video_guider_params=None,
-                audio_guider_params=None,
+                video_guider_params=video_guider_params,
+                audio_guider_params=audio_guider_params,
                 regenerate_video=regenerate_video,
                 regenerate_audio=regenerate_audio,
                 enhance_prompt=False,
-                distilled=True,
+                distilled=distilled,
             )
 
             if self._generation.is_generation_cancelled():

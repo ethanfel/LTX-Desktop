@@ -10,6 +10,7 @@ export interface RetakeSubmitParams {
   duration: number
   prompt: string
   mode: RetakeMode
+  distilled?: boolean
 }
 
 export interface RetakeResult {
@@ -52,6 +53,7 @@ export function useRetake() {
           duration: params.duration,
           prompt: params.prompt,
           mode: params.mode,
+          distilled: params.distilled ?? true,
         }),
       })
 

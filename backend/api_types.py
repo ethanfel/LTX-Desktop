@@ -273,6 +273,7 @@ class RetakeRequest(BaseModel):
     duration: float
     prompt: str = ""
     mode: str = "replace_audio_and_video"
+    distilled: bool = True
 
 
 class IcLoraExtractRequest(BaseModel):

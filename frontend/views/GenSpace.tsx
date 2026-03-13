@@ -951,6 +951,7 @@ export function GenSpace() {
     ready: false,
   })
   const [retakePanelKey, setRetakePanelKey] = useState(0)
+  const [retakeDistilled, setRetakeDistilled] = useState(true)
   const [retakeInitial, setRetakeInitial] = useState<{
     videoUrl: string | null
     videoPath: string | null
@@ -1330,6 +1331,7 @@ export function GenSpace() {
         duration: retakeInput.duration,
         prompt,
         mode: 'replace_audio_and_video',
+        distilled: retakeDistilled,
       })
       return
     }
@@ -1624,6 +1626,8 @@ export function GenSpace() {
             fillHeight
             isProcessing={isRetaking}
             processingStatus={retakeStatus}
+            distilled={retakeDistilled}
+            onDistilledChange={setRetakeDistilled}
             onChange={(data) => setRetakeInput(data)}
           />
         </div>
