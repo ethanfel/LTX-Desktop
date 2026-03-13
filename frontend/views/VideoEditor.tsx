@@ -1575,14 +1575,13 @@ export function VideoEditor() {
     const gapStart = cutPoint - trimA
     const gapEnd = gapStart + gapDuration
     setGapImageFile(null)
-    // Match blend settings to source clip quality: pro model, source resolution, no audio
+    // Match blend settings to source clip quality: pro model, source resolution
     const sourceResolution = clipA.asset?.resolution || clipB.asset?.resolution || '1080p'
     const sourceAspectRatio = clipA.asset?.generationParams?.imageAspectRatio || clipB.asset?.generationParams?.imageAspectRatio
     setGapSettings(prev => ({
       ...prev,
       model: 'pro',
       videoResolution: sourceResolution,
-      audio: false,
       ...(sourceAspectRatio ? { aspectRatio: sourceAspectRatio } : {}),
     }))
     setSelectedGap({ trackIndex: clip.trackIndex, startTime: gapStart, endTime: gapEnd })
