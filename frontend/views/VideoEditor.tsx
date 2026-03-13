@@ -1530,19 +1530,26 @@ export function VideoEditor() {
       return // no adjacent clip found
     }
 
-    // Calculate how much to trim from each clip (capped at half their duration)
-    const trimA = Math.min(OVERLAP_DURATION, clipA.duration * 0.4)
-    const trimB = Math.min(OVERLAP_DURATION, clipB.duration * 0.4)
+    // Guard: both clips must be long enough to trim
+    const MIN_REMAINING = 0.5 // seconds — clips must retain at least this much
+    if (clipA.duration <= MIN_REMAINING || clipB.duration <= MIN_REMAINING) return
+
+    // Calculate how much to trim from each clip (capped at 40% of duration, leaving MIN_REMAINING)
+    const trimA = Math.min(OVERLAP_DURATION, clipA.duration * 0.4, clipA.duration - MIN_REMAINING)
+    const trimB = Math.min(OVERLAP_DURATION, clipB.duration * 0.4, clipB.duration - MIN_REMAINING)
     const gapDuration = trimA + trimB
 
     pushUndo()
 
-    // Trim clip A (increase trimEnd) and clip B (increase trimStart, shift startTime)
+    // Trim clip A (reduce duration) and clip B (increase trimStart, shift startTime)
+    // Also trim their linked audio clips to keep audio in sync
+    const linkedA = new Set(clipA.linkedClipIds ?? [])
+    const linkedB = new Set(clipB.linkedClipIds ?? [])
     setClips(prev => prev.map(c => {
-      if (c.id === clipA.id) {
+      if (c.id === clipA.id || linkedA.has(c.id)) {
         return { ...c, duration: c.duration - trimA }
       }
-      if (c.id === clipB.id) {
+      if (c.id === clipB.id || linkedB.has(c.id)) {
         return { ...c, startTime: c.startTime + trimB, duration: c.duration - trimB, trimStart: c.trimStart + trimB * c.speed }
       }
       return c
@@ -1551,9 +1558,10 @@ export function VideoEditor() {
     // Open gap generation in blend mode at the newly created gap
     const gapStart = clipA.startTime + clipA.duration - trimA
     const gapEnd = gapStart + gapDuration
+    setGapImageFile(null)
     setSelectedGap({ trackIndex: clip.trackIndex, startTime: gapStart, endTime: gapEnd })
     setGapGenerateMode('blend')
-  }, [clips, pushUndo, setClips, setSelectedGap, setGapGenerateMode])
+  }, [clips, pushUndo, setClips, setSelectedGap, setGapGenerateMode, setGapImageFile])
 
   const handleRetakeClip = useCallback((clip: TimelineClip) => {
     const liveAsset = getLiveAsset(clip)

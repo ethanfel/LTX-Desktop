@@ -212,7 +212,7 @@ export function useGapGeneration({
       console.error('Gap generation failed:', err)
       setGeneratingGap(null)
     }
-  }, [selectedGap, gapGenerateMode, gapPrompt, gapSettings, gapImageFile, gapApplyAudioToTrack, currentProjectId, regenGenerate, regenGenerateImage])
+  }, [selectedGap, gapGenerateMode, gapPrompt, gapSettings, gapImageFile, gapApplyAudioToTrack, currentProjectId, regenGenerate, regenGenerateImage, gapBeforeFramePath, gapAfterFramePath])
 
   // When generation completes, place the result in the gap
   useEffect(() => {
@@ -387,11 +387,11 @@ export function useGapGeneration({
 
       const clipBefore = trackClips.find(c => {
         const clipEnd = c.startTime + c.duration
-        return Math.abs(clipEnd - gap.startTime) < 0.05
+        return Math.abs(clipEnd - gap.startTime) < 0.1
       })
 
       const clipAfter = trackClips.find(c => {
-        return Math.abs(c.startTime - gap.endTime) < 0.05
+        return Math.abs(c.startTime - gap.endTime) < 0.1
       })
 
       if (!clipBefore && !clipAfter) {

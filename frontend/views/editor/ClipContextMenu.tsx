@@ -530,12 +530,16 @@ function SingleClipMenu({
                 onClick={() => { onRetakeClip(contextClip); close() }} />
               {(() => {
                 // Show AI Blend if there's an adjacent video clip on the same track
+                // Both clips must be long enough to trim (>0.5s minimum remaining)
+                const MIN_BLEND = 0.5
                 const trackClips = clips
                   .filter(c => c.trackIndex === contextClip.trackIndex && c.type === 'video' && c.id !== contextClip.id)
                 const clipEnd = contextClip.startTime + contextClip.duration
-                const hasAdjacentAfter = trackClips.some(c => Math.abs(c.startTime - clipEnd) < 0.1)
-                const hasAdjacentBefore = trackClips.some(c => Math.abs((c.startTime + c.duration) - contextClip.startTime) < 0.1)
-                if (!hasAdjacentAfter && !hasAdjacentBefore) return null
+                const adjacentAfter = trackClips.find(c => Math.abs(c.startTime - clipEnd) < 0.1)
+                const adjacentBefore = trackClips.find(c => Math.abs((c.startTime + c.duration) - contextClip.startTime) < 0.1)
+                const canBlend = (adjacentAfter && contextClip.duration > MIN_BLEND && adjacentAfter.duration > MIN_BLEND)
+                  || (adjacentBefore && contextClip.duration > MIN_BLEND && adjacentBefore.duration > MIN_BLEND)
+                if (!canBlend) return null
                 return (
                   <MenuItem icon={Blend} iconClass="text-purple-400" label="AI Blend"
                     disabled={isRegenerating}

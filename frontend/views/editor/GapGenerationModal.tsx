@@ -232,8 +232,8 @@ export function GapGenerationModal({
                 {/* Before frame */}
                 {displayedBeforeFrame ? (
                   <div
-                    className="relative w-[38%] h-full flex-shrink-0 overflow-hidden rounded-l-xl group/before cursor-pointer"
-                    onClick={() => { if (startFrameEnabled) { setStartFrameEnabled(false) } else { setStartFrameEnabled(true); setEndFrameEnabled(false) } }}
+                    className={`relative w-[38%] h-full flex-shrink-0 overflow-hidden rounded-l-xl group/before ${isBlendMode ? '' : 'cursor-pointer'}`}
+                    onClick={() => { if (isBlendMode) return; if (startFrameEnabled) { setStartFrameEnabled(false) } else { setStartFrameEnabled(true); setEndFrameEnabled(false) } }}
                   >
                     <img
                       src={displayedBeforeFrame}
@@ -298,8 +298,8 @@ export function GapGenerationModal({
                 {/* After frame */}
                 {displayedAfterFrame ? (
                   <div
-                    className="relative w-[38%] h-full flex-shrink-0 overflow-hidden rounded-r-xl group/after cursor-pointer"
-                    onClick={() => { if (endFrameEnabled) { setEndFrameEnabled(false) } else { setEndFrameEnabled(true); setStartFrameEnabled(false) } }}
+                    className={`relative w-[38%] h-full flex-shrink-0 overflow-hidden rounded-r-xl group/after ${isBlendMode ? '' : 'cursor-pointer'}`}
+                    onClick={() => { if (isBlendMode) return; if (endFrameEnabled) { setEndFrameEnabled(false) } else { setEndFrameEnabled(true); setStartFrameEnabled(false) } }}
                   >
                     <img
                       src={displayedAfterFrame}
