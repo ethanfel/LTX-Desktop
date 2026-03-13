@@ -147,6 +147,7 @@ class PipelinesHandler(StateHandlerBase):
             warmth=VideoPipelineWarmth.COLD,
             is_compiled=False,
             lora_path=lora_path,
+            lora_strength=lora_strength,
         )
         return self._compile_if_enabled(state)
 
@@ -272,8 +273,8 @@ class PipelinesHandler(StateHandlerBase):
         with self._lock:
             if self._pipeline_matches_model_type(model_type):
                 match self.state.gpu_slot:
-                    case GpuSlot(active_pipeline=VideoPipelineState(lora_path=current_lora) as existing_state):
-                        if current_lora == lora_path:
+                    case GpuSlot(active_pipeline=VideoPipelineState(lora_path=current_lora, lora_strength=current_strength) as existing_state):
+                        if current_lora == lora_path and current_strength == lora_strength:
                             state = existing_state
                     case _:
                         pass

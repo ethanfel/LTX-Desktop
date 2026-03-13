@@ -100,6 +100,7 @@ class VideoPipelineState:
     warmth: VideoPipelineWarmth
     is_compiled: bool
     lora_path: str | None = None
+    lora_strength: float = 1.0
 
 
 @dataclass

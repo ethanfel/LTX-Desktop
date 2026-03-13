@@ -126,6 +126,12 @@ class VideoGenerationHandler(StateHandlerBase):
             image = self._prepare_image(image_path, width, height)
             logger.info("Image: %s -> %sx%s", image_path, width, height)
 
+        last_frame_image = None
+        last_frame_image_path = normalize_optional_path(req.lastFrameImagePath)
+        if last_frame_image_path:
+            last_frame_image = self._prepare_image(last_frame_image_path, width, height)
+            logger.info("Last frame image: %s -> %sx%s", last_frame_image_path, width, height)
+
         generation_id = self._make_generation_id()
         seed = self._resolve_seed()
 
@@ -145,6 +151,8 @@ class VideoGenerationHandler(StateHandlerBase):
                 negative_prompt=req.negativePrompt,
                 lora_path=lora_path,
                 lora_strength=lora_strength,
+                last_frame_image=last_frame_image,
+                last_frame_strength=req.lastFrameStrength,
             )
 
             self._generation.complete_generation(output_path)
@@ -171,9 +179,12 @@ class VideoGenerationHandler(StateHandlerBase):
         negative_prompt: str,
         lora_path: str | None = None,
         lora_strength: float = 1.0,
+        last_frame_image: Image.Image | None = None,
+        last_frame_strength: float = 1.0,
     ) -> str:
         t_total_start = time.perf_counter()
-        gen_mode = "i2v" if image is not None else "t2v"
+        has_any_image = image is not None or last_frame_image is not None
+        gen_mode = "i2v" if has_any_image else "t2v"
         logger.info("[%s] Generation started (model=fast, %dx%d, %d frames, %d fps)", gen_mode, width, height, num_frames, int(fps))
 
         if self._generation.is_generation_cancelled():
@@ -196,17 +207,22 @@ class VideoGenerationHandler(StateHandlerBase):
 
         images: list[ImageConditioningInput] = []
         temp_image_path: str | None = None
+        temp_last_image_path: str | None = None
         if image is not None:
             temp_image_path = tempfile.NamedTemporaryFile(suffix=".png", delete=False).name
             image.save(temp_image_path)
-            images = [ImageConditioningInput(path=temp_image_path, frame_idx=0, strength=1.0)]
+            images.append(ImageConditioningInput(path=temp_image_path, frame_idx=0, strength=1.0))
+        if last_frame_image is not None:
+            temp_last_image_path = tempfile.NamedTemporaryFile(suffix=".png", delete=False).name
+            last_frame_image.save(temp_last_image_path)
+            images.append(ImageConditioningInput(path=temp_last_image_path, frame_idx=num_frames - 1, strength=last_frame_strength))
 
         output_path = self._make_output_path()
 
         try:
             settings = self.state.app_settings
             use_api_encoding = not self._text.should_use_local_encoding()
-            if image is not None:
+            if has_any_image:
                 enhance = use_api_encoding and settings.prompt_enhancer_enabled_i2v
             else:
                 enhance = use_api_encoding and settings.prompt_enhancer_enabled_t2v
@@ -252,6 +268,8 @@ class VideoGenerationHandler(StateHandlerBase):
             self._text.clear_api_embeddings()
             if temp_image_path and os.path.exists(temp_image_path):
                 os.unlink(temp_image_path)
+            if temp_last_image_path and os.path.exists(temp_last_image_path):
+                os.unlink(temp_last_image_path)
 
     def _generate_a2v(
         self, req: GenerateVideoRequest, duration: int, fps: int, *, audio_path: str
@@ -545,15 +563,13 @@ class VideoGenerationHandler(StateHandlerBase):
             raise HTTPError(400, error_detail) from None
 
     def list_loras(self) -> LoraListResponse:
-        """Return .safetensors files from the models directory and its loras/ subdirectory."""
+        """Return .safetensors files from the loras/ subdirectory of models dir."""
         lora_files: list[str] = []
-        models_dir = self.models_dir
+        loras_dir = self.models_dir / "loras"
 
-        for search_dir in (models_dir, models_dir / "loras"):
-            if not search_dir.is_dir():
-                continue
-            for path in sorted(search_dir.iterdir()):
-                if path.is_file() and path.suffix == ".safetensors":
+        if loras_dir.is_dir():
+            for path in sorted(loras_dir.rglob("*.safetensors")):
+                if path.is_file():
                     lora_files.append(str(path))
 
         return LoraListResponse(loras=lora_files)

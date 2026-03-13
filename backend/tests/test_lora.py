@@ -121,6 +121,26 @@ class TestLoraGeneration:
         assert isinstance(gpu_slot.active_pipeline, VideoPipelineState)
         assert gpu_slot.active_pipeline.lora_path == str(lora_a)
 
+        # Second generation with lora_b — should evict and recreate pipeline
+        r2 = client.post(
+            "/api/generate",
+            json={
+                "prompt": "test b",
+                "resolution": "540p",
+                "model": "fast",
+                "duration": "2",
+                "fps": "24",
+                "loraPath": str(lora_b),
+            },
+        )
+        assert r2.status_code == 200
+
+        # Pipeline state should now have lora_b
+        gpu_slot = test_state.state.gpu_slot
+        assert gpu_slot is not None
+        assert isinstance(gpu_slot.active_pipeline, VideoPipelineState)
+        assert gpu_slot.active_pipeline.lora_path == str(lora_b)
+
 
 class TestLoraListEndpoint:
     """Test the /api/loras endpoint."""
@@ -133,26 +153,30 @@ class TestLoraListEndpoint:
         assert data["loras"] == []
 
     def test_list_loras_finds_safetensors(self, client, test_state):
-        """Returns .safetensors files from models dir and loras/ subdir."""
+        """Returns .safetensors files from loras/ subdir only."""
         models_dir = test_state.config.default_models_dir
 
-        # Create a .safetensors file in models dir
-        top_lora = models_dir / "top_level.safetensors"
-        top_lora.write_bytes(b"\x00" * 256)
+        # Create a .safetensors file in top-level models dir (should NOT be listed)
+        top_file = models_dir / "model_checkpoint.safetensors"
+        top_file.write_bytes(b"\x00" * 256)
 
-        # Create loras/ subdirectory with a file
+        # Create loras/ subdirectory with files
         loras_subdir = models_dir / "loras"
         loras_subdir.mkdir(parents=True, exist_ok=True)
-        sub_lora = loras_subdir / "custom_style.safetensors"
-        sub_lora.write_bytes(b"\x00" * 256)
+        lora_a = loras_subdir / "custom_style.safetensors"
+        lora_a.write_bytes(b"\x00" * 256)
+        lora_b = loras_subdir / "anime.safetensors"
+        lora_b.write_bytes(b"\x00" * 256)
 
-        # Also create a non-safetensors file (should be excluded)
-        (models_dir / "readme.txt").write_text("not a lora")
+        # Non-safetensors file in loras/ (should be excluded)
+        (loras_subdir / "readme.txt").write_text("not a lora")
 
         r = client.get("/api/loras")
         assert r.status_code == 200
         data = r.json()
-        assert len(data["loras"]) == 2
         lora_names = [Path(p).name for p in data["loras"]]
-        assert "top_level.safetensors" in lora_names
+        assert len(lora_names) == 2
         assert "custom_style.safetensors" in lora_names
+        assert "anime.safetensors" in lora_names
+        # Top-level model checkpoint should NOT appear
+        assert "model_checkpoint.safetensors" not in lora_names
