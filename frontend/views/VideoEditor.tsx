@@ -991,7 +991,7 @@ export function VideoEditor() {
     gapSuggesting, gapSuggestion, gapSuggestionError, gapSuggestionNoApiKey, gapBeforeFrame, gapAfterFrame,
     gapApplyAudioToTrack, setGapApplyAudioToTrack,
     regenerateSuggestion,
-    blendOverlap, setBlendInfo, updateBlendOverlap,
+    blendOverlap, blendContext, setBlendInfo, setBlendContext, updateBlendOverlap,
     generatingGap, regenProgress: gapRegenProgress,
     cancelGapGeneration,
     timelineGaps, deleteGap, handleGapGenerate,
@@ -4289,6 +4289,8 @@ export function VideoEditor() {
           gapSuggestionNoApiKey={gapSuggestionNoApiKey}
           blendOverlap={blendOverlap}
           onBlendOverlapChange={updateBlendOverlap}
+          blendContext={blendContext}
+          onBlendContextChange={setBlendContext}
         />
       )}
 

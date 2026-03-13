@@ -46,6 +46,8 @@ interface GapGenerationModalProps {
   gapSuggestionNoApiKey?: boolean
   blendOverlap?: number
   onBlendOverlapChange?: (overlap: number) => void
+  blendContext?: number
+  onBlendContextChange?: (context: number) => void
 }
 
 export function GapGenerationModal({
@@ -78,6 +80,8 @@ export function GapGenerationModal({
   anchorPosition,
   blendOverlap,
   onBlendOverlapChange,
+  blendContext,
+  onBlendContextChange,
 }: GapGenerationModalProps) {
   if (!selectedGap) return null
 
@@ -352,8 +356,8 @@ export function GapGenerationModal({
             {isBlendMode && blendOverlap !== undefined && onBlendOverlapChange && (
               <div className="px-5 pt-3 pb-0">
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-[10px] text-zinc-500 uppercase font-semibold">Overlap per side</label>
-                  <span className="text-[10px] text-zinc-400 tabular-nums">{blendOverlap.toFixed(1)}s ({(blendOverlap * 2).toFixed(1)}s total)</span>
+                  <label className="text-[10px] text-zinc-500 uppercase font-semibold">Gap per side</label>
+                  <span className="text-[10px] text-zinc-400 tabular-nums">{blendOverlap.toFixed(1)}s ({(blendOverlap * 2).toFixed(1)}s total gap)</span>
                 </div>
                 <input
                   type="range"
@@ -367,6 +371,29 @@ export function GapGenerationModal({
                 <div className="flex justify-between text-[9px] text-zinc-600 mt-0.5">
                   <span>0.5s</span>
                   <span>4s</span>
+                </div>
+              </div>
+            )}
+
+            {/* Blend context control */}
+            {isBlendMode && blendContext !== undefined && onBlendContextChange && (
+              <div className="px-5 pt-2 pb-0">
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-[10px] text-zinc-500 uppercase font-semibold">Context per side</label>
+                  <span className="text-[10px] text-zinc-400 tabular-nums">{blendContext.toFixed(1)}s</span>
+                </div>
+                <input
+                  type="range"
+                  min={0.5}
+                  max={3}
+                  step={0.5}
+                  value={blendContext}
+                  onChange={(e) => onBlendContextChange(parseFloat(e.target.value))}
+                  className="w-full h-1.5 bg-zinc-700 rounded-full appearance-none cursor-pointer accent-purple-500 [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-purple-400 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:shadow-md"
+                />
+                <div className="flex justify-between text-[9px] text-zinc-600 mt-0.5">
+                  <span>0.5s</span>
+                  <span>3s</span>
                 </div>
               </div>
             )}
