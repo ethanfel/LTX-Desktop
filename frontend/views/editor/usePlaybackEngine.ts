@@ -823,7 +823,7 @@ export function usePlaybackEngine(params: UsePlaybackEngineParams) {
         }
       } else {
         video.playbackRate = syncClip.speed
-        if (!isNaN(targetTime) && (forceSeek || Math.abs(video.currentTime - targetTime) > 0.3)) {
+        if (!isNaN(targetTime) && (forceSeek || Math.abs(video.currentTime - targetTime) > 0.04)) {
           if (forceSeek && Math.abs(video.currentTime - targetTime) < 0.001) {
             video.currentTime = targetTime + 0.001
           }
