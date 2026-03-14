@@ -331,9 +331,9 @@ export function ProgramMonitor({
 
                   {/* Cross-dissolve incoming clip overlay */}
                   {crossDissolveState && (() => {
-                    const { incoming, progress } = crossDissolveState
+                    const { incoming } = crossDissolveState
                     const inOffset = currentTime - incoming.startTime
-                    const inOpacity = progress * ((incoming.opacity ?? 100) / 100)
+                    const inOpacity = (incoming.opacity ?? 100) / 100  // Full opacity — outgoing fades on top for proper cross-dissolve
                     const inStyle = { ...getClipEffectStyles(incoming, inOffset), opacity: inOpacity }
                     const inSrc = getClipUrl(incoming) || incoming.asset?.url || ''
                     if (incoming.asset?.type === 'video') {
