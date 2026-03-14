@@ -385,10 +385,15 @@ export function useGapGeneration({
       const finalUrl = copied?.url ?? origUrl
 
       // Use backend-reported duration when available (may differ from gapDuration
-      // if the backend trimmed frozen tail frames, e.g. with FLF end-frame conditioning)
-      const actualDuration = (type === 'video' && regenVideoDuration && regenVideoDuration > 0)
-        ? regenVideoDuration
-        : gapDuration
+      // if the backend trimmed frozen tail frames, e.g. with FLF end-frame conditioning).
+      // For blend mode, the full video includes context frames on both sides.
+      const isBlendMode = gap.mode === 'blend'
+      const blendExtra = isBlendMode ? (gap.blendTrimStart ?? 0) + (gap.blendTrimEnd ?? 0) : 0
+      const actualDuration = isBlendMode
+        ? gapDuration + blendExtra
+        : (type === 'video' && regenVideoDuration && regenVideoDuration > 0)
+          ? regenVideoDuration
+          : gapDuration
 
       const asset = addAsset(currentProjectId, {
         type: type as 'image' | 'video',
