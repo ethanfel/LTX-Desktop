@@ -29,6 +29,7 @@ export interface AppSettings {
   savePngFrames: boolean
   lastFrameStrength: number
   flfTrimFrozenTail: boolean
+  flfTrimTransitionFrame: boolean
 }
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
@@ -50,6 +51,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   savePngFrames: false,
   lastFrameStrength: 0.8,
   flfTrimFrozenTail: false,
+  flfTrimTransitionFrame: false,
 }
 
 type BackendProcessStatus = 'alive' | 'restarting' | 'dead'
@@ -101,6 +103,7 @@ function normalizeAppSettings(data: Partial<AppSettings>): AppSettings {
     savePngFrames: data.savePngFrames ?? DEFAULT_APP_SETTINGS.savePngFrames,
     lastFrameStrength: data.lastFrameStrength ?? DEFAULT_APP_SETTINGS.lastFrameStrength,
     flfTrimFrozenTail: data.flfTrimFrozenTail ?? DEFAULT_APP_SETTINGS.flfTrimFrozenTail,
+    flfTrimTransitionFrame: data.flfTrimTransitionFrame ?? DEFAULT_APP_SETTINGS.flfTrimTransitionFrame,
   }
 }
 

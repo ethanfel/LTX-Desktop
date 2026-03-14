@@ -289,9 +289,10 @@ class VideoGenerationHandler(StateHandlerBase):
 
             # Trim the last 8 frozen frames caused by last-frame conditioning
             if trim_frozen_tail and output_path.exists():
-                trimmed_frames = num_frames - 8  # remove the last latent frame's pixel frames
+                extra = 9 if settings.flf_trim_transition_frame else 8
+                trimmed_frames = num_frames - extra
                 self._trim_video_frames(str(output_path), trimmed_frames, fps)
-                logger.info("FLF trim: removed last 8 frozen frames (%d -> %d)", num_frames, trimmed_frames)
+                logger.info("FLF trim: removed last %d frames (%d -> %d)", extra, num_frames, trimmed_frames)
 
             t_total_end = time.perf_counter()
             logger.info("[%s] Total generation: %.2fs (load=%.2fs, text=%.2fs, inference=%.2fs)",
@@ -440,27 +441,27 @@ class VideoGenerationHandler(StateHandlerBase):
     def _trim_video_frames(video_path: str, target_frames: int, fps: float) -> None:
         """Trim a video to exactly target_frames using ffmpeg.
 
-        Used by the FLF frozen-tail workaround: we generate extra frames then
-        cut the video to the originally requested duration.
+        Uses -frames:v for frame-exact cutting (not duration-based which
+        is imprecise with stream copy).
         """
-        duration = target_frames / fps
         tmp_path = video_path + ".trimmed.mp4"
         cmd = [
             "ffmpeg", "-y",
             "-i", video_path,
-            "-t", f"{duration:.6f}",
-            "-c:v", "copy", "-c:a", "copy",
+            "-frames:v", str(target_frames),
+            "-c:v", "libx264", "-crf", "14", "-preset", "fast",
+            "-pix_fmt", "yuv420p",
+            "-c:a", "copy",
             tmp_path,
         ]
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
         if result.returncode != 0:
             logger.error("FLF trim failed: %s", result.stderr[:500])
-            # Keep the untrimmed video rather than failing
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)
             return
         os.replace(tmp_path, video_path)
-        logger.info("FLF trim: %s trimmed to %.2fs (%d frames)", video_path, duration, target_frames)
+        logger.info("FLF trim: %s trimmed to %d frames (%.2fs)", video_path, target_frames, target_frames / fps)
 
     def _make_output_path(self) -> Path:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

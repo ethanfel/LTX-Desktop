@@ -78,6 +78,7 @@ class AppSettings(SettingsBaseModel):
     save_png_frames: bool = False
     last_frame_strength: float = 0.8
     flf_trim_frozen_tail: bool = False
+    flf_trim_transition_frame: bool = False
 
     @field_validator("last_frame_strength", mode="before")
     @classmethod
@@ -161,6 +162,7 @@ class SettingsResponse(SettingsBaseModel):
     save_png_frames: bool = False
     last_frame_strength: float = 0.8
     flf_trim_frozen_tail: bool = False
+    flf_trim_transition_frame: bool = False
 
 
 def to_settings_response(settings: AppSettings) -> SettingsResponse:

@@ -808,6 +808,41 @@ export function SettingsModal({ isOpen, onClose, initialTab }: SettingsModalProp
                 </div>
               </div>
 
+              {/* FLF Trim Transition Frame Setting */}
+              {settings.flfTrimFrozenTail && (
+              <div className="space-y-3 pt-4 border-t border-zinc-800">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <svg className="h-4 w-4 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="5" y1="12" x2="19" y2="12" />
+                        <polyline points="12 5 19 12 12 19" />
+                      </svg>
+                      <label className="text-sm font-medium text-white">
+                        Also Trim Transition Frame
+                      </label>
+                    </div>
+                    <p className="text-xs text-zinc-500 leading-relaxed">
+                      Remove one additional frame (9 total instead of 8). The frame just before the frozen group can show a slight color shift as the model transitions to the conditioned image.
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => onSettingsChange({ ...settings, flfTrimTransitionFrame: !settings.flfTrimTransitionFrame })}
+                    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                      settings.flfTrimTransitionFrame ? 'bg-amber-500' : 'bg-zinc-700'
+                    }`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                        settings.flfTrimTransitionFrame ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+              )}
+
               {/* Anonymous Analytics Setting */}
               <div className="space-y-3 pt-4 border-t border-zinc-800">
                 <div className="flex items-start justify-between gap-4">
