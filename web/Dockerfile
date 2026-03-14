@@ -57,6 +57,7 @@ COPY --from=frontend-builder /build/dist /srv/frontend
 # Copy web layer (shim, launcher, nginx config, entrypoint)
 COPY web/electronapi-shim.js /srv/electronapi-shim.js
 COPY web/web_launcher.py /app/web/web_launcher.py
+COPY web/export.py /app/web/export.py
 COPY web/nginx.conf /etc/nginx/nginx.conf
 COPY web/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh \
