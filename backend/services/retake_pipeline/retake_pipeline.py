@@ -59,4 +59,5 @@ class RetakePipeline(Protocol):
         enhance_prompt: bool = False,
         distilled: bool = True,
         fps_override: float | None = None,
+        mask_ramp_latents: int = 0,
     ) -> None: ...

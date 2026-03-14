@@ -105,6 +105,7 @@ class LTXRetakePipeline:
         enhance_prompt: bool = False,
         distilled: bool = False,
         fps_override: float | None = None,
+        mask_ramp_latents: int = 0,
     ) -> tuple[Iterator[torch.Tensor], Audio]:
         from ltx_core.components.diffusion_steps import EulerDiffusionStep
         from ltx_core.components.guiders import MultiModalGuider
@@ -328,6 +329,48 @@ class LTXRetakePipeline:
             100.0 * mask_sum / max(mask_numel, 1),
             mask.min().item(), mask.max().item(),
         )
+
+        # Apply soft ramp at mask boundaries for smoother transitions.
+        # Patches are ordered temporal-outer, spatial-inner:
+        #   [t0_s0, t0_s1, …, t0_sK, t1_s0, …]
+        # We find the boundary between mask=0 and mask=1 and ramp over
+        # `mask_ramp_latents` temporal positions on each side.
+        if mask_ramp_latents > 0 and mask.shape[1] > 0:
+            from ltx_core.types import VideoLatentShape
+            lat_shape = VideoLatentShape.from_pixel_shape(
+                shape=output_shape,
+                latent_channels=self.pipeline_components.video_latent_channels,
+                scale_factors=self.pipeline_components.video_scale_factors,
+            )
+            n_temporal = lat_shape.frames
+            n_spatial = mask.shape[1] // n_temporal if n_temporal > 0 else 0
+            if n_spatial > 0:
+                # Reshape to [B, T, S, 1] for easy temporal indexing
+                mask_4d = mask.view(1, n_temporal, n_spatial, 1)
+                # Find first and last temporal positions with mask=1
+                temporal_mask = mask_4d[0, :, 0, 0]  # [T] — same for all spatial
+                ones = (temporal_mask > 0.5).nonzero(as_tuple=True)[0]
+                if len(ones) > 0:
+                    first_one = int(ones[0].item())
+                    last_one = int(ones[-1].item())
+                    # Ramp up: positions [first_one - ramp, first_one) go from 0→1
+                    for i in range(mask_ramp_latents):
+                        t = first_one - mask_ramp_latents + i
+                        if 0 <= t < n_temporal:
+                            val = (i + 1) / (mask_ramp_latents + 1)
+                            mask_4d[0, t, :, 0] = val
+                    # Ramp down: positions (last_one, last_one + ramp] go from 1→0
+                    for i in range(mask_ramp_latents):
+                        t = last_one + 1 + i
+                        if 0 <= t < n_temporal:
+                            val = 1.0 - (i + 1) / (mask_ramp_latents + 1)
+                            mask_4d[0, t, :, 0] = val
+                    # Write back
+                    mask.copy_(mask_4d.view_as(mask))
+                    logger.info(
+                        "Applied mask ramp (%d latent positions): min=%.4f, max=%.4f",
+                        mask_ramp_latents, mask.min().item(), mask.max().item(),
+                    )
         audio_state, audio_tools = noise_audio_state(
             output_shape=output_shape,
             noiser=noiser,
@@ -430,6 +473,7 @@ class LTXRetakePipeline:
         enhance_prompt: bool = False,
         distilled: bool = True,
         fps_override: float | None = None,
+        mask_ramp_latents: int = 0,
     ) -> None:
         metadata_fps, num_frames, _, _ = get_videostream_metadata(video_path)
         effective_fps = fps_override if fps_override is not None else metadata_fps
@@ -448,6 +492,7 @@ class LTXRetakePipeline:
             enhance_prompt=enhance_prompt,
             distilled=distilled,
             fps_override=fps_override,
+            mask_ramp_latents=mask_ramp_latents,
         )
         audio_out: Audio | None = audio
         tiling_config = TilingConfig.default()

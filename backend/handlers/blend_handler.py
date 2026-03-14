@@ -185,6 +185,7 @@ class BlendHandler(StateHandlerBase):
                 enhance_prompt=False,
                 distilled=req.distilled,
                 fps_override=float(fps),
+                mask_ramp_latents=1,
             )
 
             if self._generation.is_generation_cancelled():
