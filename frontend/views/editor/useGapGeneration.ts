@@ -382,13 +382,30 @@ export function useGapGeneration({
       const finalPath = copied?.path ?? srcPath
       const finalUrl = copied?.url ?? origUrl
 
+      // Probe actual video duration from the file (don't trust gapDuration —
+      // the backend may produce shorter videos, e.g. with end-frame conditioning)
+      let actualDuration = gapDuration
+      if (type === 'video') {
+        try {
+          actualDuration = await new Promise<number>((resolve, reject) => {
+            const v = document.createElement('video')
+            v.preload = 'metadata'
+            v.onloadedmetadata = () => { resolve(v.duration); v.src = '' }
+            v.onerror = () => reject(new Error('Failed to probe video duration'))
+            v.src = finalUrl
+          })
+        } catch {
+          // Fall back to gapDuration if probe fails
+        }
+      }
+
       const asset = addAsset(currentProjectId, {
         type: type as 'image' | 'video',
         path: finalPath,
         url: finalUrl,
         prompt: gap.prompt,
         resolution: isImageResult ? gap.settings.imageResolution : gap.settings.videoResolution,
-        duration: type === 'video' ? (gap.mode === 'blend' ? gapDuration + (gap.blendTrimStart ?? 0) + (gap.blendTrimEnd ?? 0) : gapDuration) : undefined,
+        duration: type === 'video' ? actualDuration : undefined,
         generationParams: {
           mode: (isImageResult ? 'text-to-image' : (gap.mode === 'blend' ? 'image-to-video' : gap.imageFile ? 'image-to-video' : 'text-to-video')) as 'text-to-video' | 'image-to-video' | 'text-to-image',
           prompt: gap.prompt,
@@ -452,7 +469,7 @@ export function useGapGeneration({
         assetId: asset.id,
         type: type === 'image' ? 'image' : 'video',
         startTime: isBlend ? gap.startTime - blendTrimStart : gap.startTime,
-        duration: gapDuration + blendTrimStart + blendTrimEnd,
+        duration: actualDuration,
         trimStart: 0,
         trimEnd: 0,
         speed: 1,
@@ -477,8 +494,8 @@ export function useGapGeneration({
           id: audioClipId,
           assetId: asset.id,
           type: 'audio',
-          startTime: gap.startTime,
-          duration: gapDuration,
+          startTime: isBlend ? gap.startTime - blendTrimStart : gap.startTime,
+          duration: actualDuration,
           trimStart: 0,
           trimEnd: 0,
           speed: 1,
