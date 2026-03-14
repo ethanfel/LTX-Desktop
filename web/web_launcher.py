@@ -11,9 +11,11 @@ import logging
 import threading
 from pathlib import Path
 
-# Add backend to sys.path so we can import the original app
+# Add backend and web dirs to sys.path
 BACKEND_DIR = Path(__file__).resolve().parent.parent / "backend"
+WEB_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(BACKEND_DIR))
+sys.path.insert(0, str(WEB_DIR))
 
 # Set required env vars BEFORE importing the app (which reads them at import time).
 # LTX_APP_DATA_DIR is set by the entrypoint to /data/LTXDesktop.
@@ -185,6 +187,92 @@ async def write_file(req: WriteFileRequest) -> dict[str, object]:
     else:
         dest.write_text(req.data, encoding=encoding)
     return {"success": True, "path": str(dest)}
+
+class ExportRequest(BaseModel):
+    clips: list[dict[str, object]]
+    outputPath: str
+    codec: str
+    width: int
+    height: int
+    fps: int
+    quality: int
+    letterbox: dict[str, object] | None = None
+    subtitles: list[dict[str, object]] | None = None
+
+@file_router.post("/export")
+async def export_timeline(req: ExportRequest) -> dict[str, object]:
+    if not _is_safe_path(req.outputPath):
+        return {"error": "Output path not allowed"}
+    Path(req.outputPath).parent.mkdir(parents=True, exist_ok=True)
+
+    from export import (
+        ExportClip, ExportSubtitle, Letterbox, run_export,
+    )
+
+    clips = [
+        ExportClip(
+            url=str(c.get("url", "")),
+            type=str(c.get("type", "")),
+            startTime=float(c.get("startTime", 0)),
+            duration=float(c.get("duration", 0)),
+            trimStart=float(c.get("trimStart", 0)),
+            speed=float(c.get("speed", 1)),
+            reversed=bool(c.get("reversed", False)),
+            flipH=bool(c.get("flipH", False)),
+            flipV=bool(c.get("flipV", False)),
+            opacity=int(c.get("opacity", 100)),
+            trackIndex=int(c.get("trackIndex", 0)),
+            muted=bool(c.get("muted", False)),
+            volume=float(c.get("volume", 1)),
+        )
+        for c in req.clips
+    ]
+
+    letterbox = None
+    if req.letterbox:
+        letterbox = Letterbox(
+            ratio=float(req.letterbox.get("ratio", 2.35)),
+            color=str(req.letterbox.get("color", "#000000")),
+            opacity=float(req.letterbox.get("opacity", 1.0)),
+        )
+
+    subs = None
+    if req.subtitles:
+        subs = []
+        for s in req.subtitles:
+            style = s.get("style", {})
+            if not isinstance(style, dict):
+                style = {}
+            subs.append(ExportSubtitle(
+                text=str(s.get("text", "")),
+                startTime=float(s.get("startTime", 0)),
+                endTime=float(s.get("endTime", 0)),
+                fontSize=int(style.get("fontSize", 24)),
+                fontFamily=str(style.get("fontFamily", "sans-serif")),
+                fontWeight=str(style.get("fontWeight", "normal")),
+                color=str(style.get("color", "#ffffff")),
+                backgroundColor=str(style.get("backgroundColor", "transparent")),
+                position=str(style.get("position", "bottom")),
+                italic=bool(style.get("italic", False)),
+            ))
+
+    result = run_export(
+        clips=clips,
+        output_path=req.outputPath,
+        codec=req.codec,
+        width=req.width,
+        height=req.height,
+        fps=req.fps,
+        quality=req.quality,
+        letterbox=letterbox,
+        subtitles=subs,
+    )
+
+    # Auto-download the result
+    if result.get("success") and req.outputPath.startswith(str(DOWNLOADS_DIR)):
+        result["download"] = True
+
+    return result
 
 @file_router.get("/read")
 async def read_file(path: str) -> dict[str, str]:

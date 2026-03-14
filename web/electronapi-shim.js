@@ -376,9 +376,23 @@
       }).then(function (r) { return r.json(); });
     },
 
-    // Export — v1: not supported, users download raw clips
-    exportNative: function () {
-      return Promise.resolve({ success: false, error: "Timeline export not available in web UI. Download clips individually." });
+    // Export — server-side ffmpeg via backend endpoint
+    exportNative: function (data) {
+      return fetch("/api/files/export", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (result) {
+          if (result.success && result.download && data.outputPath) {
+            triggerDownload(data.outputPath);
+          }
+          return result;
+        })
+        .catch(function (e) {
+          return { success: false, error: "Export failed: " + e.message };
+        });
     },
     exportCancel: function () { return Promise.resolve({ ok: true }); },
 
