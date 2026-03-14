@@ -388,7 +388,7 @@ export function useGapGeneration({
         url: finalUrl,
         prompt: gap.prompt,
         resolution: isImageResult ? gap.settings.imageResolution : gap.settings.videoResolution,
-        duration: type === 'video' ? gapDuration : undefined,
+        duration: type === 'video' ? (gap.mode === 'blend' ? gapDuration + (gap.blendTrimStart ?? 0) + (gap.blendTrimEnd ?? 0) : gapDuration) : undefined,
         generationParams: {
           mode: (isImageResult ? 'text-to-image' : (gap.mode === 'blend' ? 'image-to-video' : gap.imageFile ? 'image-to-video' : 'text-to-video')) as 'text-to-video' | 'image-to-video' | 'text-to-image',
           prompt: gap.prompt,
@@ -433,33 +433,28 @@ export function useGapGeneration({
         }
       }
 
-      // For blend mode, the output video includes context + gap + context.
-      // The context frames are preserved by the retake model and match the
-      // original clips, so cross-dissolving over them produces a smooth transition.
-      // trimStart/trimEnd hide the context normally; dissolve transitions
-      // extend into these "handles" to reveal matching frames.
+      // For blend mode, the output video includes context_a + gap + context_b.
+      // Place the full blend clip on the timeline (no trim) and use standard
+      // dissolve transitions at both junctions. The overlapping context regions
+      // are cross-dissolved with the adjacent originals.
       const isBlend = gap.mode === 'blend' && gap.blendCutPoint !== undefined
       const blendTrimStart = isBlend ? (gap.blendTrimStart ?? 0) : 0
       const blendTrimEnd = isBlend ? (gap.blendTrimEnd ?? 0) : 0
-      // Dissolve duration = context handle duration (the "common frames"
-      // where preserved retake output matches the original clips).
-      const dissolveA = blendTrimStart
-      const dissolveB = blendTrimEnd
-      const blendTransitionIn = dissolveA > 0
-        ? { type: 'dissolve' as const, duration: dissolveA }
+      const blendTransitionIn = blendTrimStart > 0
+        ? { type: 'dissolve' as const, duration: blendTrimStart }
         : { type: 'none' as const, duration: 0 }
-      const blendTransitionOut = dissolveB > 0
-        ? { type: 'dissolve' as const, duration: dissolveB }
+      const blendTransitionOut = blendTrimEnd > 0
+        ? { type: 'dissolve' as const, duration: blendTrimEnd }
         : { type: 'none' as const, duration: 0 }
 
       const newClip: TimelineClip = {
         id: videoClipId,
         assetId: asset.id,
         type: type === 'image' ? 'image' : 'video',
-        startTime: gap.startTime,
-        duration: gapDuration,
-        trimStart: blendTrimStart,
-        trimEnd: blendTrimEnd,
+        startTime: isBlend ? gap.startTime - blendTrimStart : gap.startTime,
+        duration: gapDuration + blendTrimStart + blendTrimEnd,
+        trimStart: 0,
+        trimEnd: 0,
         speed: 1,
         reversed: false,
         muted: false,
@@ -504,15 +499,27 @@ export function useGapGeneration({
       
       setClips(prev => {
         let updated = [...prev]
-        // For blend mode, add matching dissolve on neighboring clips
+        // For blend mode, trim adjacent clips so the context regions overlap
+        // with the blend clip, then add dissolve transitions at both junctions.
         if (isBlend) {
           updated = updated.map(c => {
             const clipEnd = c.startTime + c.duration
-            if (c.trackIndex === gap.trackIndex && Math.abs(clipEnd - gap.startTime) < 0.05 && dissolveA > 0) {
-              return { ...c, transitionOut: { type: 'dissolve' as const, duration: dissolveA } }
+            // clipA: ends at gap.startTime — trim its end by context_a duration
+            if (c.trackIndex === gap.trackIndex && Math.abs(clipEnd - gap.startTime) < 0.05 && blendTrimStart > 0) {
+              return {
+                ...c,
+                trimEnd: c.trimEnd + blendTrimStart,
+                transitionOut: { type: 'dissolve' as const, duration: blendTrimStart },
+              }
             }
-            if (c.trackIndex === gap.trackIndex && Math.abs(c.startTime - gap.endTime) < 0.05 && dissolveB > 0) {
-              return { ...c, transitionIn: { type: 'dissolve' as const, duration: dissolveB } }
+            // clipC: starts at gap.endTime — trim its start by context_b duration and shift right
+            if (c.trackIndex === gap.trackIndex && Math.abs(c.startTime - gap.endTime) < 0.05 && blendTrimEnd > 0) {
+              return {
+                ...c,
+                trimStart: c.trimStart + blendTrimEnd,
+                startTime: c.startTime + blendTrimEnd,
+                transitionIn: { type: 'dissolve' as const, duration: blendTrimEnd },
+              }
             }
             return c
           })
