@@ -244,7 +244,13 @@ export function useGapGeneration({
           // Compute seek positions in the source video files
           const seekEndA = origA.trimStart + origA.duration * origA.speed
           const seekStartB = origB.trimStart
-          const contextDuration = Math.min(blendContext, origA.duration * origA.speed * 0.5, origB.duration * origB.speed * 0.5)
+          // Each clip must provide context + half the gap, so cap accordingly
+          const halfGap = gapDuration / 2
+          const contextDuration = Math.min(
+            blendContext,
+            origA.duration * origA.speed - halfGap,
+            origB.duration * origB.speed - halfGap,
+          )
 
           // Signal that generation is in progress so the placement effect waits
           regenSetGenerating('Blending clips...')

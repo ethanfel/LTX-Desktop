@@ -101,8 +101,22 @@ class BlendHandler(StateHandlerBase):
         retake_start = context_a_duration + half_frame
         retake_end = context_a_duration + gap_duration - half_frame
 
-        # Seek positions in source videos
-        seek_a = max(0, req.seek_end_a - context_a_duration)
+        # Split the gap evenly between clip A's tail and clip B's head.
+        # The composite layout becomes:
+        #   [context_a: deeper clip A with motion]
+        #   [gap_a: clip A approaching keyframe]
+        #   [gap_b: clip B departing keyframe]
+        #   [context_b: deeper clip B with motion]
+        # This gives the retake model real motion in the gap region instead
+        # of a frozen keyframe, and context with actual motion for reference.
+        gap_a_frames = gap_frames // 2
+        gap_b_frames = gap_frames - gap_a_frames
+        gap_a_duration = gap_a_frames / fps
+
+        # Seek positions: shift context AWAY from the keyframe
+        # Clip A: read (context_a + gap_a) frames ending at the keyframe
+        seek_a = max(0, req.seek_end_a - context_a_duration - gap_a_duration)
+        # Clip B: read from keyframe forward (gap_b + context_b) frames
         seek_b = req.seek_start_b
 
         composite_path = None
@@ -132,11 +146,10 @@ class BlendHandler(StateHandlerBase):
             composite_path = self._compose_video(
                 video_a=effective_a,
                 seek_a=seek_a,
-                context_a_frames=context_a_frames,
+                a_frames=context_a_frames + gap_a_frames,
                 video_b=effective_b,
                 seek_b=seek_b,
-                context_b_frames=context_b_frames,
-                gap_frames=gap_frames,
+                b_frames=gap_b_frames + context_b_frames,
                 total_frames=total_frames,
                 fps=fps,
             )
@@ -144,11 +157,12 @@ class BlendHandler(StateHandlerBase):
             # Step 2: Validate composite meets retake constraints
             self._validate_composite(composite_path, expected_fps=fps)
             logger.info(
-                "Blend timing: context_a=%d frames (%.2fs), gap=%d frames (%.2fs), "
+                "Blend timing: context_a=%d frames (%.2fs), "
+                "gap=%d frames (%.2fs) [%d from A + %d from B], "
                 "context_b=%d frames (%.2fs), total=%d frames, "
                 "retake window=[%.3f, %.3f]s",
                 context_a_frames, context_a_duration,
-                gap_frames, gap_duration,
+                gap_frames, gap_duration, gap_a_frames, gap_b_frames,
                 context_b_frames, context_b_duration,
                 total_frames,
                 retake_start, retake_end,
@@ -199,13 +213,27 @@ class BlendHandler(StateHandlerBase):
                 rt_fps, rt_frames, rt_w, rt_h, total_frames,
             )
 
-            # Diagnostic: save retake output copy for inspection and compare frames
-            debug_retake = self.config.outputs_dir / f"_debug_retake_{generation_id}.mkv"
+            # Diagnostic: save composite + retake for inspection, compare 3 regions
             import shutil
+            debug_composite = self.config.outputs_dir / f"_debug_composite_{generation_id}.mkv"
+            debug_retake = self.config.outputs_dir / f"_debug_retake_{generation_id}.mkv"
+            shutil.copy2(composite_path, str(debug_composite))
             shutil.copy2(retake_output_path, str(debug_retake))
-            logger.info("Debug: retake output saved to %s", debug_retake)
-            gap_mid_frame = context_a_frames + gap_frames // 2
-            self._log_frame_diff(composite_path, retake_output_path, gap_mid_frame)
+            logger.info(
+                "Debug: composite=%s, retake=%s (ctx_a=0-%d, gap=%d-%d, ctx_b=%d-%d)",
+                debug_composite, debug_retake,
+                context_a_frames - 1,
+                context_a_frames, context_a_frames + gap_frames - 1,
+                context_a_frames + gap_frames, total_frames - 1,
+            )
+            # Compare context A (should be identical = preserved), gap (should differ),
+            # and context B (should be identical = preserved)
+            ctx_a_frame = context_a_frames // 2
+            gap_frame = context_a_frames + gap_frames // 2
+            ctx_b_frame = context_a_frames + gap_frames + context_b_frames // 2
+            self._log_frame_diff(composite_path, retake_output_path, ctx_a_frame)
+            self._log_frame_diff(composite_path, retake_output_path, gap_frame)
+            self._log_frame_diff(composite_path, retake_output_path, ctx_b_frame)
 
             # Step 4: Extract just the gap portion from the retake output
             self._extract_gap(
@@ -256,32 +284,29 @@ class BlendHandler(StateHandlerBase):
         *,
         video_a: str,
         seek_a: float,
-        context_a_frames: int,
+        a_frames: int,
         video_b: str,
         seek_b: float,
-        context_b_frames: int,
-        gap_frames: int,
+        b_frames: int,
         total_frames: int,
         fps: int,
     ) -> str:
-        """Create a composite video: end of clip A + frozen last frame as gap + start of clip B.
+        """Create a composite video from real footage of both clips.
 
-        Uses frame-accurate trim filters (not -ss/-t input options) to guarantee
-        exact frame counts for the retake pipeline's 8k+1 constraint.
+        Layout: [clip A segment] [clip B segment]
+        The caller arranges seek positions so that:
+          - clip A segment = context (deeper, with motion) + gap tail (approaching keyframe)
+          - clip B segment = gap head (departing keyframe) + context (deeper, with motion)
+        No frozen frames — the gap region contains actual video from both clips.
         """
         tmp = tempfile.NamedTemporaryFile(suffix=".mkv", delete=False)
         tmp.close()
         composite_path = tmp.name
 
-        # Use trim filters in the filtergraph for frame-accurate control.
-        # Input -ss is only a coarse seek hint; the trim filter does the real work.
-        # We overshoot the input read window to ensure enough frames are available.
-        read_margin = 2.0  # extra seconds to read from each source
-        duration_a = context_a_frames / fps
-        duration_b = context_b_frames / fps
+        read_margin = 2.0
+        duration_a = a_frames / fps
+        duration_b = b_frames / fps
 
-        # Compute actual -ss and trim offsets. When seek < read_margin, -ss is
-        # clamped to 0 and trim_offset equals the seek position itself.
         ss_a = max(0.0, seek_a - read_margin)
         trim_offset_a = seek_a - ss_a
         ss_b = max(0.0, seek_b - read_margin)
@@ -293,25 +318,18 @@ class BlendHandler(StateHandlerBase):
             "-ss", str(ss_b), "-i", video_b,
             "-filter_complex",
             (
-                # Trim clip A: seek to the right position, convert fps, take exact frame count
                 f"[0:v]fps={fps},setpts=PTS-STARTPTS,"
                 f"trim=start={trim_offset_a}:end={trim_offset_a + duration_a},setpts=PTS-STARTPTS[va];"
-                # Get last frame of clip A and loop for gap
-                f"[0:v]fps={fps},setpts=PTS-STARTPTS,"
-                f"trim=start={trim_offset_a + duration_a - 1.0/fps},setpts=PTS-STARTPTS[lastframe];"
-                f"[lastframe]loop=loop={gap_frames - 1}:size=1:start=0,setpts=N/{fps}/TB[vgap];"
-                # Trim clip B: take exact frame count from its start
                 f"[1:v]fps={fps},setpts=PTS-STARTPTS,"
                 f"trim=start={trim_offset_b}:end={trim_offset_b + duration_b},setpts=PTS-STARTPTS[vb];"
-                # Concatenate and limit to exact total frame count
-                f"[va][vgap][vb]concat=n=3:v=1:a=0,"
+                f"[va][vb]concat=n=2:v=1:a=0,"
                 f"trim=end_frame={total_frames},setpts=PTS-STARTPTS[vout]"
             ),
             "-map", "[vout]",
             "-c:v", "ffv1", "-pix_fmt", "yuv444p",
             "-r", str(fps),
             "-vsync", "cfr",
-            "-an",  # No audio in composite (retake will generate it)
+            "-an",
             composite_path,
         ]
 
