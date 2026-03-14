@@ -329,7 +329,7 @@ class BlendHandler(StateHandlerBase):
         cmd = [
             "ffmpeg", "-y",
             "-i", video_path,
-            "-vf", f"select='between(n\\,{start_frame}\\,{end_frame - 1})',setpts=PTS-STARTPTS",
+            "-vf", f"trim=start_frame={start_frame}:end_frame={end_frame},setpts=PTS-STARTPTS",
         ]
         if has_audio:
             cmd += [
@@ -340,7 +340,6 @@ class BlendHandler(StateHandlerBase):
             cmd += ["-an"]
         cmd += [
             "-c:v", "libx264", "-preset", "fast", "-crf", "14",
-            "-vsync", "cfr",
             output_path,
         ]
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
