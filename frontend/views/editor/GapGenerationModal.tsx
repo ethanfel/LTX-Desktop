@@ -48,6 +48,8 @@ interface GapGenerationModalProps {
   onBlendOverlapChange?: (overlap: number) => void
   blendContext?: number
   onBlendContextChange?: (context: number) => void
+  blendUseCut?: boolean
+  onBlendUseCutChange?: (useCut: boolean) => void
 }
 
 export function GapGenerationModal({
@@ -82,6 +84,8 @@ export function GapGenerationModal({
   onBlendOverlapChange,
   blendContext,
   onBlendContextChange,
+  blendUseCut,
+  onBlendUseCutChange,
 }: GapGenerationModalProps) {
   if (!selectedGap) return null
 
@@ -403,6 +407,23 @@ export function GapGenerationModal({
                       <span>3s</span>
                     </div>
                   </div>
+                  {onBlendUseCutChange && (
+                    <div className="px-5 pt-2.5 pb-0">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[10px] text-zinc-500 uppercase font-semibold">Transition</label>
+                        <div className="flex bg-zinc-800 rounded-md overflow-hidden border border-zinc-700">
+                          <button
+                            className={`px-2.5 py-0.5 text-[10px] font-medium transition-colors ${!blendUseCut ? 'bg-purple-500/20 text-purple-300' : 'text-zinc-500 hover:text-zinc-300'}`}
+                            onClick={() => onBlendUseCutChange(false)}
+                          >Dissolve</button>
+                          <button
+                            className={`px-2.5 py-0.5 text-[10px] font-medium transition-colors ${blendUseCut ? 'bg-purple-500/20 text-purple-300' : 'text-zinc-500 hover:text-zinc-300'}`}
+                            onClick={() => onBlendUseCutChange(true)}
+                          >Cut</button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   <div className="px-5 pt-1.5 pb-0">
                     <div className="text-[9px] text-zinc-600 tabular-nums text-center">
                       Total: {totalFrames}f = 8×{(totalFrames - 1) / 8}+1 @ {fps}fps ({(totalFrames / fps).toFixed(1)}s)

@@ -93,6 +93,7 @@ export function useGapGeneration({
     blendCutPoint?: number // original boundary between clips A and B
     blendTrimStart?: number // seconds of leading context in blend output
     blendTrimEnd?: number   // seconds of trailing context in blend output
+    blendUseCut?: boolean   // true = hard cut (trim to gap), false = dissolve
   } | null>(null)
 
   // Gap context-aware prompt suggestion
@@ -113,6 +114,7 @@ export function useGapGeneration({
   // Blend mode: configurable overlap duration and original clip state for re-trimming
   const [blendOverlap, setBlendOverlap] = useState(2) // seconds per side
   const [blendContext, setBlendContext] = useState(1) // seconds of context per side for retake
+  const [blendUseCut, setBlendUseCut] = useState(false) // true = hard cut (trim to gap), false = dissolve (full clip)
   const [blendInfo, setBlendInfo] = useState<{
     clipAId: string
     clipBId: string
@@ -228,6 +230,7 @@ export function useGapGeneration({
       imageFile: gapImageFile,
       applyAudio: gapApplyAudioToTrack,
       blendCutPoint: blendInfo?.cutPoint,
+      blendUseCut,
     })
 
     // Close the modal immediately so user can keep editing
@@ -447,16 +450,16 @@ export function useGapGeneration({
       }
 
       // For blend mode, the output video includes context_a + gap + context_b.
-      // Place the full blend clip on the timeline (no trim) and use standard
-      // dissolve transitions at both junctions. The overlapping context regions
-      // are cross-dissolved with the adjacent originals.
+      // "Dissolve" mode: full clip with cross-dissolves at both junctions.
+      // "Cut" mode: trim to just the gap portion with hard cuts.
       const isBlend = gap.mode === 'blend' && gap.blendCutPoint !== undefined
       const blendTrimStart = isBlend ? (gap.blendTrimStart ?? 0) : 0
       const blendTrimEnd = isBlend ? (gap.blendTrimEnd ?? 0) : 0
-      const blendTransitionIn = blendTrimStart > 0
+      const useCut = isBlend && (gap.blendUseCut ?? false)
+      const blendTransitionIn = (!useCut && blendTrimStart > 0)
         ? { type: 'dissolve' as const, duration: blendTrimStart }
         : { type: 'none' as const, duration: 0 }
-      const blendTransitionOut = blendTrimEnd > 0
+      const blendTransitionOut = (!useCut && blendTrimEnd > 0)
         ? { type: 'dissolve' as const, duration: blendTrimEnd }
         : { type: 'none' as const, duration: 0 }
 
@@ -464,10 +467,10 @@ export function useGapGeneration({
         id: videoClipId,
         assetId: asset.id,
         type: type === 'image' ? 'image' : 'video',
-        startTime: isBlend ? gap.startTime - blendTrimStart : gap.startTime,
-        duration: actualDuration,
-        trimStart: 0,
-        trimEnd: 0,
+        startTime: (isBlend && !useCut) ? gap.startTime - blendTrimStart : gap.startTime,
+        duration: useCut ? gapDuration : actualDuration,
+        trimStart: useCut ? blendTrimStart : 0,
+        trimEnd: useCut ? blendTrimEnd : 0,
         speed: 1,
         reversed: false,
         muted: false,
@@ -512,9 +515,10 @@ export function useGapGeneration({
       
       setClips(prev => {
         let updated = [...prev]
-        // For blend mode, trim adjacent clips so the context regions overlap
-        // with the blend clip, then add dissolve transitions at both junctions.
-        if (isBlend) {
+        // For blend dissolve mode, trim adjacent clips so the context regions
+        // overlap with the blend clip, then add dissolve transitions.
+        // Cut mode: no adjacent clip changes (hard cuts).
+        if (isBlend && !useCut) {
           updated = updated.map(c => {
             const clipEnd = c.startTime + c.duration
             // clipA: ends at gap.startTime — trim its end by context_a duration
@@ -807,10 +811,12 @@ export function useGapGeneration({
     // Blend
     blendOverlap,
     blendContext,
+    blendUseCut,
     blendInfo,
     setBlendInfo,
     setBlendOverlap,
     setBlendContext,
+    setBlendUseCut,
     updateBlendOverlap,
     // Background generation tracking
     generatingGap,
