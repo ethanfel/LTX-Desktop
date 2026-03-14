@@ -441,8 +441,10 @@ export function useGapGeneration({
       const isBlend = gap.mode === 'blend' && gap.blendCutPoint !== undefined
       const blendTrimStart = isBlend ? (gap.blendTrimStart ?? 0) : 0
       const blendTrimEnd = isBlend ? (gap.blendTrimEnd ?? 0) : 0
-      const dissolveA = isBlend ? gap.blendCutPoint! - gap.startTime : 0
-      const dissolveB = isBlend ? gap.endTime - gap.blendCutPoint! : 0
+      // Dissolve duration = context handle duration (the "common frames"
+      // where preserved retake output matches the original clips).
+      const dissolveA = blendTrimStart
+      const dissolveB = blendTrimEnd
       const blendTransitionIn = dissolveA > 0
         ? { type: 'dissolve' as const, duration: dissolveA }
         : { type: 'none' as const, duration: 0 }
