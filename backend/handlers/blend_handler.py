@@ -204,36 +204,6 @@ class BlendHandler(StateHandlerBase):
             if self._generation.is_generation_cancelled():
                 raise RuntimeError("Generation was cancelled")
 
-            # Verify retake output metadata
-            from ltx_pipelines.utils.media_io import get_videostream_metadata
-            rt_fps, rt_frames, rt_w, rt_h = get_videostream_metadata(retake_output_path)
-            logger.info(
-                "Retake output: fps=%.4f, frames=%d, %dx%d (expected %d frames)",
-                rt_fps, rt_frames, rt_w, rt_h, total_frames,
-            )
-
-            # Diagnostic: save composite + retake for inspection, compare 3 regions
-            import shutil
-            debug_composite = self.config.outputs_dir / f"_debug_composite_{generation_id}.mkv"
-            debug_retake = self.config.outputs_dir / f"_debug_retake_{generation_id}.mkv"
-            shutil.copy2(composite_path, str(debug_composite))
-            shutil.copy2(retake_output_path, str(debug_retake))
-            logger.info(
-                "Debug: composite=%s, retake=%s (ctx_a=0-%d, gap=%d-%d, ctx_b=%d-%d)",
-                debug_composite, debug_retake,
-                context_a_frames - 1,
-                context_a_frames, context_a_frames + gap_frames - 1,
-                context_a_frames + gap_frames, total_frames - 1,
-            )
-            # Compare context A (should be identical = preserved), gap (should differ),
-            # and context B (should be identical = preserved)
-            ctx_a_frame = context_a_frames // 2
-            gap_frame = context_a_frames + gap_frames // 2
-            ctx_b_frame = context_a_frames + gap_frames + context_b_frames // 2
-            self._log_frame_diff(composite_path, retake_output_path, ctx_a_frame)
-            self._log_frame_diff(composite_path, retake_output_path, gap_frame)
-            self._log_frame_diff(composite_path, retake_output_path, ctx_b_frame)
-
             # Step 4: Extract just the gap portion from the retake output
             self._extract_gap(
                 retake_output_path,
@@ -241,13 +211,6 @@ class BlendHandler(StateHandlerBase):
                 num_frames=gap_frames,
                 fps=fps,
                 output_path=str(output_path),
-            )
-
-            # Diagnostic: verify extracted output
-            ext_fps, ext_frames, ext_w, ext_h = get_videostream_metadata(str(output_path))
-            logger.info(
-                "Extracted gap: fps=%.4f, frames=%d, %dx%d (expected %d frames)",
-                ext_fps, ext_frames, ext_w, ext_h, gap_frames,
             )
 
             from services.ltx_pipeline_common import maybe_extract_pngs
@@ -325,7 +288,7 @@ class BlendHandler(StateHandlerBase):
                 f"trim=end_frame={total_frames},setpts=PTS-STARTPTS[vout]"
             ),
             "-map", "[vout]",
-            "-c:v", "ffv1", "-pix_fmt", "yuv420p",
+            "-c:v", "ffv1", "-pix_fmt", "yuv444p",
             "-r", str(fps),
             "-vsync", "cfr",
             "-an",
@@ -438,44 +401,6 @@ class BlendHandler(StateHandlerBase):
                 400,
                 f"Source video dimensions must be multiples of 32. Got {width}x{height}.",
             )
-
-    @staticmethod
-    def _log_frame_diff(video_a: str, video_b: str, frame_idx: int) -> None:
-        """Log pixel-level difference at a specific frame between two videos."""
-        try:
-            def _read_frame(path: str, idx: int) -> bytes:
-                cmd = [
-                    "ffmpeg", "-y",
-                    "-i", path,
-                    "-vf", f"select=eq(n\\,{idx})",
-                    "-frames:v", "1",
-                    "-f", "rawvideo", "-pix_fmt", "rgb24",
-                    "pipe:1",
-                ]
-                r = subprocess.run(cmd, capture_output=True, timeout=10)
-                return r.stdout
-
-            ba = _read_frame(video_a, frame_idx)
-            bb = _read_frame(video_b, frame_idx)
-            if ba and bb:
-                import numpy as np  # type: ignore[import-untyped]
-                a = np.frombuffer(ba, dtype=np.uint8)
-                b = np.frombuffer(bb, dtype=np.uint8)
-                n = min(len(a), len(b))
-                diff = np.abs(a[:n].astype(np.int16) - b[:n].astype(np.int16))
-                logger.info(
-                    "Frame %d diff (composite vs retake): mean=%.1f, max=%d, "
-                    "identical=%s (bytes: %d vs %d)",
-                    frame_idx, float(diff.mean()), int(diff.max()),
-                    bool(np.array_equal(a[:n], b[:n])), len(a), len(b),
-                )
-            else:
-                logger.warning(
-                    "Frame diff: could not read frame %d (a=%d bytes, b=%d bytes)",
-                    frame_idx, len(ba), len(bb),
-                )
-        except Exception as exc:
-            logger.warning("Frame diff probe failed: %s", exc)
 
     def _resolve_seed(self) -> int:
         import time as _time
