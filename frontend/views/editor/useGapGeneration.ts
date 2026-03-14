@@ -88,6 +88,7 @@ export function useGapGeneration({
     mode: 'text-to-video' | 'image-to-video' | 'text-to-image' | 'blend' | 'extend'
     prompt: string; settings: GenerationSettings
     imageFile: File | null; applyAudio: boolean
+    blendCutPoint?: number // original boundary between clips A and B
   } | null>(null)
 
   // Gap context-aware prompt suggestion
@@ -222,6 +223,7 @@ export function useGapGeneration({
       settings,
       imageFile: gapImageFile,
       applyAudio: gapApplyAudioToTrack,
+      blendCutPoint: blendInfo?.cutPoint,
     })
 
     // Close the modal immediately so user can keep editing
@@ -422,6 +424,18 @@ export function useGapGeneration({
         }
       }
 
+      // For blend mode, dissolve over the frames shared between the
+      // original clips and the blend output (= the overlap that was trimmed).
+      const isBlend = gap.mode === 'blend' && gap.blendCutPoint !== undefined
+      const dissolveA = isBlend ? gap.blendCutPoint! - gap.startTime : 0
+      const dissolveB = isBlend ? gap.endTime - gap.blendCutPoint! : 0
+      const blendTransitionIn = dissolveA > 0
+        ? { type: 'dissolve' as const, duration: dissolveA }
+        : { type: 'none' as const, duration: 0 }
+      const blendTransitionOut = dissolveB > 0
+        ? { type: 'dissolve' as const, duration: dissolveB }
+        : { type: 'none' as const, duration: 0 }
+
       const newClip: TimelineClip = {
         id: videoClipId,
         assetId: asset.id,
@@ -438,8 +452,8 @@ export function useGapGeneration({
         asset,
         flipH: false,
         flipV: false,
-        transitionIn: { type: 'none', duration: 0 },
-        transitionOut: { type: 'none', duration: 0 },
+        transitionIn: blendTransitionIn,
+        transitionOut: blendTransitionOut,
         colorCorrection: { ...DEFAULT_COLOR_CORRECTION },
         opacity: 100,
         ...(shouldCreateAudio && audioTrackIndex >= 0 ? { linkedClipIds: [audioClipId] } : {}),
@@ -472,7 +486,23 @@ export function useGapGeneration({
         })
       }
       
-      setClips(prev => [...prev, ...newClips])
+      setClips(prev => {
+        let updated = [...prev]
+        // For blend mode, add matching dissolve on neighboring clips
+        if (isBlend) {
+          updated = updated.map(c => {
+            const clipEnd = c.startTime + c.duration
+            if (c.trackIndex === gap.trackIndex && Math.abs(clipEnd - gap.startTime) < 0.05 && dissolveA > 0) {
+              return { ...c, transitionOut: { type: 'dissolve' as const, duration: dissolveA } }
+            }
+            if (c.trackIndex === gap.trackIndex && Math.abs(c.startTime - gap.endTime) < 0.05 && dissolveB > 0) {
+              return { ...c, transitionIn: { type: 'dissolve' as const, duration: dissolveB } }
+            }
+            return c
+          })
+        }
+        return [...updated, ...newClips]
+      })
 
       // Clean up generating state
       setGeneratingGap(null)
