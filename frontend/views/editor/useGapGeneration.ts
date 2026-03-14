@@ -19,6 +19,7 @@ export interface UseGapGenerationParams {
   regenGenerateImage: (prompt: string, settings: GenerationSettings) => Promise<void>
   regenVideoUrl: string | null
   regenVideoPath: string | null
+  regenVideoDuration: number | null
   regenImageUrl: string | null
   regenImagePath: string | null
   isRegenerating: boolean
@@ -26,7 +27,7 @@ export interface UseGapGenerationParams {
   regenCancel: () => void
   regenReset: () => void
   regenError: string | null
-  regenSetResult: (videoPath: string, videoUrl: string) => void
+  regenSetResult: (videoPath: string, videoUrl: string, duration?: number) => void
   regenSetGenerating: (message?: string) => void
   projectId: string
 }
@@ -44,6 +45,7 @@ export function useGapGeneration({
   regenGenerateImage,
   regenVideoUrl,
   regenVideoPath,
+  regenVideoDuration,
   regenImageUrl,
   regenImagePath,
   isRegenerating,
@@ -382,22 +384,11 @@ export function useGapGeneration({
       const finalPath = copied?.path ?? srcPath
       const finalUrl = copied?.url ?? origUrl
 
-      // Probe actual video duration from the file (don't trust gapDuration —
-      // the backend may produce shorter videos, e.g. with end-frame conditioning)
-      let actualDuration = gapDuration
-      if (type === 'video') {
-        try {
-          actualDuration = await new Promise<number>((resolve, reject) => {
-            const v = document.createElement('video')
-            v.preload = 'metadata'
-            v.onloadedmetadata = () => { resolve(v.duration); v.src = '' }
-            v.onerror = () => reject(new Error('Failed to probe video duration'))
-            v.src = finalUrl
-          })
-        } catch {
-          // Fall back to gapDuration if probe fails
-        }
-      }
+      // Use backend-reported duration when available (may differ from gapDuration
+      // if the backend trimmed frozen tail frames, e.g. with FLF end-frame conditioning)
+      const actualDuration = (type === 'video' && regenVideoDuration && regenVideoDuration > 0)
+        ? regenVideoDuration
+        : gapDuration
 
       const asset = addAsset(currentProjectId, {
         type: type as 'image' | 'video',
@@ -550,7 +541,7 @@ export function useGapGeneration({
       regenReset()
     })()
 
-  }, [regenVideoUrl, regenImageUrl, isRegenerating, generatingGap, regenError])
+  }, [regenVideoUrl, regenImageUrl, regenVideoDuration, isRegenerating, generatingGap, regenError])
 
   // --- Gap context-aware prompt suggestion ---
   // Use refs so the async function always reads the latest values without re-creating

@@ -168,6 +168,7 @@ class SuggestGapPromptResponse(BaseModel):
 class GenerateVideoResponse(BaseModel):
     status: str
     video_path: str | None = None
+    duration: float | None = None  # actual video duration in seconds
 
 
 class GenerateImageResponse(BaseModel):

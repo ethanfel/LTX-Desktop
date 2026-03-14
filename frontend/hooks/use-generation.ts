@@ -9,6 +9,7 @@ interface GenerationState {
   statusMessage: string
   videoUrl: string | null
   videoPath: string | null  // Original file path for upscaling
+  videoDuration: number | null  // Actual video duration from backend (seconds)
   imageUrl: string | null
   imagePath: string | null  // Original file path for first image
   imageUrls: string[]  // For multiple image variations
@@ -29,7 +30,7 @@ interface UseGenerationReturn extends GenerationState {
   generateImage: (prompt: string, settings: GenerationSettings) => Promise<void>
   cancel: () => void
   reset: () => void
-  setResult: (videoPath: string, videoUrl: string) => void
+  setResult: (videoPath: string, videoUrl: string, duration?: number) => void
   setGenerating: (message?: string) => void
 }
 
@@ -99,6 +100,7 @@ export function useGeneration(): UseGenerationReturn {
     statusMessage: '',
     videoUrl: null,
     videoPath: null,
+    videoDuration: null,
     imageUrl: null,
     imagePath: null,
     imageUrls: [],
@@ -125,6 +127,7 @@ export function useGeneration(): UseGenerationReturn {
       statusMessage: statusMsg,
       videoUrl: null,
       videoPath: null,
+      videoDuration: null,
       imageUrl: null,
       imagePath: null,
       imageUrls: [],
@@ -240,6 +243,7 @@ export function useGeneration(): UseGenerationReturn {
           statusMessage: 'Complete!',
           videoUrl: fileUrl,
           videoPath: result.video_path,  // Keep original path for API calls
+          videoDuration: result.duration ?? null,
           imageUrl: null,
           imagePath: null,
           imageUrls: [],
@@ -341,6 +345,7 @@ export function useGeneration(): UseGenerationReturn {
       statusMessage: numImages > 1 ? `Generating ${numImages} images...` : 'Generating image...',
       videoUrl: null,
       videoPath: null,
+      videoDuration: null,
       imageUrl: null,
       imagePath: null,
       imageUrls: [],
@@ -430,6 +435,7 @@ export function useGeneration(): UseGenerationReturn {
             statusMessage: 'Complete!',
             videoUrl: null,
             videoPath: null,
+            videoDuration: null,
             imageUrl: fileUrls[0],  // First image for backwards compatibility
             imagePath: rawPaths[0],  // First image path
             imageUrls: fileUrls,    // All images
@@ -471,6 +477,7 @@ export function useGeneration(): UseGenerationReturn {
       statusMessage: '',
       videoUrl: null,
       videoPath: null,
+      videoDuration: null,
       imageUrl: null,
       imagePath: null,
       imageUrls: [],
@@ -486,6 +493,7 @@ export function useGeneration(): UseGenerationReturn {
       statusMessage: message || 'Generating...',
       videoUrl: null,
       videoPath: null,
+      videoDuration: null,
       imageUrl: null,
       imagePath: null,
       imageUrls: [],
@@ -494,13 +502,14 @@ export function useGeneration(): UseGenerationReturn {
     })
   }, [])
 
-  const setResult = useCallback((videoPath: string, videoUrl: string) => {
+  const setResult = useCallback((videoPath: string, videoUrl: string, duration?: number) => {
     setState({
       isGenerating: false,
       progress: 100,
       statusMessage: 'Complete!',
       videoUrl,
       videoPath,
+      videoDuration: duration ?? null,
       imageUrl: null,
       imagePath: null,
       imageUrls: [],

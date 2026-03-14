@@ -161,9 +161,17 @@ class VideoGenerationHandler(StateHandlerBase):
                 model_type=model_type,
             )
 
+            # Compute actual duration (may differ from requested if FLF tail was trimmed)
+            actual_frames = num_frames
+            settings = self.state.app_settings
+            if last_frame_image is not None and settings.flf_trim_frozen_tail:
+                extra = 9 if settings.flf_trim_transition_frame else 8
+                actual_frames = num_frames - extra
+            actual_duration = (actual_frames - 1) / fps
+
             # PNGs already saved from raw tensor during encode (if enabled)
             self._generation.complete_generation(output_path)
-            return GenerateVideoResponse(status="complete", video_path=output_path)
+            return GenerateVideoResponse(status="complete", video_path=output_path, duration=actual_duration)
 
         except Exception as e:
             self._generation.fail_generation(str(e))
