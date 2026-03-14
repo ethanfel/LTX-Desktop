@@ -512,12 +512,10 @@ export function useGapGeneration({
                 transitionOut: { type: 'dissolve' as const, duration: blendTrimStart },
               }
             }
-            // clipC: starts at gap.endTime — trim its start by context_b duration and shift right
+            // clipC: starts at gap.endTime — add dissolve-in (blend overlaps into clipC naturally)
             if (c.trackIndex === gap.trackIndex && Math.abs(c.startTime - gap.endTime) < 0.05 && blendTrimEnd > 0) {
               return {
                 ...c,
-                trimStart: c.trimStart + blendTrimEnd,
-                startTime: c.startTime + blendTrimEnd,
                 transitionIn: { type: 'dissolve' as const, duration: blendTrimEnd },
               }
             }

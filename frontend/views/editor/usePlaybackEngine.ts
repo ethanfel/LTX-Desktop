@@ -130,6 +130,7 @@ export function usePlaybackEngine(params: UsePlaybackEngineParams) {
     }
     
     // Detect dissolve region at a given time (inline, no React dependency)
+    // Supports both adjacent clips (standard) and overlapping clips (blend).
     const getDissolveAtTime = (time: number): { outgoing: TimelineClip; incoming: TimelineClip; progress: number } | null => {
       const all = clipsRef.current
       for (const clipA of all) {
@@ -137,12 +138,19 @@ export function usePlaybackEngine(params: UsePlaybackEngineParams) {
         const clipAEnd = clipA.startTime + clipA.duration
         const dissolveStart = clipAEnd - clipA.transitionOut.duration
         if (time < dissolveStart || time >= clipAEnd) continue
-        const clipB = all.find((c: TimelineClip) =>
-          c.id !== clipA.id &&
-          c.trackIndex === clipA.trackIndex &&
-          c.transitionIn?.type === 'dissolve' &&
-          Math.abs(c.startTime - clipAEnd) < 0.05
-        )
+        // Find incoming clip: adjacent (within 0.05s) OR overlapping on the same track
+        const clipB = all.find((c: TimelineClip) => {
+          if (c.id === clipA.id || c.trackIndex !== clipA.trackIndex) return false
+          if (c.transitionIn?.type !== 'dissolve') return false
+          // Adjacent: clipB starts right at clipA's end
+          if (Math.abs(c.startTime - clipAEnd) < 0.05) return true
+          // Overlapping: clipB starts before clipA ends and extends past it
+          const cEnd = c.startTime + c.duration
+          if (c.startTime < clipAEnd && cEnd > clipAEnd) return true
+          // Overlapping: clipA extends into clipB
+          if (c.startTime < clipAEnd && c.startTime >= dissolveStart) return true
+          return false
+        })
         if (!clipB) continue
         const dissolveDuration = clipA.transitionOut.duration
         const timeIntoDissolve = time - dissolveStart

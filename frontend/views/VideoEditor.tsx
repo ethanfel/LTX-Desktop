@@ -938,13 +938,18 @@ export function VideoEditor() {
       // Is the playhead within the dissolve-out region of clipA?
       if (currentTime < dissolveStart || currentTime >= clipAEnd) continue
       
-      // Find the matching incoming clip (starts at clipA's end, has dissolve-in)
-      const clipB = clips.find(c =>
-        c.id !== clipA.id &&
-        c.trackIndex === clipA.trackIndex &&
-        c.transitionIn?.type === 'dissolve' &&
-        Math.abs(c.startTime - clipAEnd) < 0.05
-      )
+      // Find the matching incoming clip: adjacent or overlapping on the same track
+      const clipB = clips.find(c => {
+        if (c.id === clipA.id || c.trackIndex !== clipA.trackIndex) return false
+        if (c.transitionIn?.type !== 'dissolve') return false
+        // Adjacent
+        if (Math.abs(c.startTime - clipAEnd) < 0.05) return true
+        // Overlapping: clip starts before clipA ends
+        const cEnd = c.startTime + c.duration
+        if (c.startTime < clipAEnd && cEnd > clipAEnd) return true
+        if (c.startTime < clipAEnd && c.startTime >= dissolveStart) return true
+        return false
+      })
       if (!clipB) continue
       
       // Compute progress: 0 = fully outgoing (clipA), 1 = fully incoming (clipB)
