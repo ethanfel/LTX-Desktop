@@ -161,7 +161,7 @@ class VideoGenerationHandler(StateHandlerBase):
                 model_type=model_type,
             )
 
-            self._maybe_extract_pngs(output_path)
+            # PNGs already saved from raw tensor during encode (if enabled)
             self._generation.complete_generation(output_path)
             return GenerateVideoResponse(status="complete", video_path=output_path)
 
@@ -231,6 +231,9 @@ class VideoGenerationHandler(StateHandlerBase):
             trim_frozen_tail = settings.flf_trim_frozen_tail
 
         output_path = self._make_output_path()
+        # Save PNGs directly from raw tensor (before H264 encoding) if enabled
+        from services.ltx_pipeline_common import png_dir_for_video
+        raw_png_dir = png_dir_for_video(str(output_path)) if settings.save_png_frames else None
 
         try:
             use_api_encoding = not self._text.should_use_local_encoding()
@@ -267,6 +270,7 @@ class VideoGenerationHandler(StateHandlerBase):
                     num_inference_steps=steps,
                     images=images,
                     output_path=str(output_path),
+                    png_dir=raw_png_dir,
                 )
             else:
                 pipeline_state.pipeline.generate(  # type: ignore[call-arg]
@@ -278,6 +282,7 @@ class VideoGenerationHandler(StateHandlerBase):
                     frame_rate=fps,
                     images=images,
                     output_path=str(output_path),
+                    png_dir=raw_png_dir,
                 )
             t_inference_end = time.perf_counter()
             logger.info("[%s] Inference: %.2fs", gen_mode, t_inference_end - t_inference_start)

@@ -508,6 +508,7 @@ class FakeFastVideoPipeline(_FakeVideoPipelineBase):
         frame_rate: float,
         images: list[ImageConditioningInput],
         output_path: str,
+        png_dir: str | None = None,
     ) -> None:
         self._record_generate(
             {
@@ -519,6 +520,7 @@ class FakeFastVideoPipeline(_FakeVideoPipelineBase):
                 "frame_rate": frame_rate,
                 "images": images,
                 "output_path": output_path,
+                "png_dir": png_dir,
             }
         )
 
@@ -686,6 +688,7 @@ class FakeProVideoPipeline(_FakeVideoPipelineBase):
         num_inference_steps: int,
         images: list[ImageConditioningInput],
         output_path: str,
+        png_dir: str | None = None,
     ) -> None:
         self._record_generate(
             {
@@ -699,6 +702,7 @@ class FakeProVideoPipeline(_FakeVideoPipelineBase):
                 "num_inference_steps": num_inference_steps,
                 "images": images,
                 "output_path": output_path,
+                "png_dir": png_dir,
             }
         )
 
@@ -738,6 +742,7 @@ class FakeHQVideoPipeline(_FakeVideoPipelineBase):
         num_inference_steps: int,
         images: list[ImageConditioningInput],
         output_path: str,
+        png_dir: str | None = None,
     ) -> None:
         self._record_generate(
             {
@@ -751,6 +756,7 @@ class FakeHQVideoPipeline(_FakeVideoPipelineBase):
                 "num_inference_steps": num_inference_steps,
                 "images": images,
                 "output_path": output_path,
+                "png_dir": png_dir,
             }
         )
 

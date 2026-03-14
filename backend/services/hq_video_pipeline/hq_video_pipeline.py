@@ -36,6 +36,7 @@ class HQVideoPipeline(Protocol):
         num_inference_steps: int,
         images: list[ImageConditioningInput],
         output_path: str,
+        png_dir: str | None = None,
     ) -> None:
         ...
 

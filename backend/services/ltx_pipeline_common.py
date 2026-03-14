@@ -67,6 +67,7 @@ def _encode_video_av(
     pix_fmt: str,
     codec_options: dict[str, str] | None = None,
     audio_codec: str = "aac",
+    png_dir: str | None = None,
 ) -> None:
     """Core PyAV encoder used by both lossy and lossless wrappers.
 
@@ -81,6 +82,16 @@ def _encode_video_av(
 
     first_chunk = next(video)
     _, height, width, _ = first_chunk.shape
+
+    # Prepare PNG output directory if requested
+    _png_path: Path | None = None
+    _png_frame_idx = 0
+    _PILImage: Any = None
+    if png_dir is not None:
+        from PIL import Image as _PILImport  # noqa: PLC0415
+        _PILImage = _PILImport
+        _png_path = Path(png_dir)
+        _png_path.mkdir(parents=True, exist_ok=True)
 
     container: Any = av.open(output_path, mode="w")
     try:
@@ -110,6 +121,12 @@ def _encode_video_av(
         for video_chunk in tqdm(_all_chunks(first_chunk, video), total=video_chunks_number_value):
             video_chunk_cpu = video_chunk.to("cpu").numpy()
             for frame_array in video_chunk_cpu:
+                # Save raw RGB frame as PNG before any lossy encoding
+                if _png_path is not None:
+                    _png_frame_idx += 1
+                    _PILImage.fromarray(frame_array).save(
+                        _png_path / f"frame_{_png_frame_idx:05d}.png",
+                    )
                 frame: Any = av.VideoFrame.from_ndarray(frame_array, format="rgb24")
                 for packet in stream.encode(frame):
                     container.mux(packet)
@@ -168,20 +185,28 @@ def encode_video_output(
     fps: int,
     output_path: str,
     video_chunks_number_value: int,
+    *,
+    png_dir: str | None = None,
 ) -> None:
     """Encode video tensor to H264 MP4 at CRF 14 (near-visually-lossless).
 
     Reimplements the vendored ``encode_video()`` with higher quality settings:
     CRF 14 instead of libx264 default (23), preset ``fast`` for a good
     speed/quality tradeoff.
+
+    If *png_dir* is given, also saves each raw RGB frame as a lossless PNG
+    directly from the tensor — before any lossy H264 encoding.
     """
     _encode_video_av(
         video, audio, fps, output_path, video_chunks_number_value,
         codec="libx264", pix_fmt="yuv420p",
         codec_options={"crf": "14", "preset": "fast"},
         audio_codec="aac",
+        png_dir=png_dir,
     )
     logger.info("Video saved to %s (CRF 14)", output_path)
+    if png_dir is not None:
+        logger.info("Raw PNG frames saved to %s", png_dir)
 
 
 def encode_video_lossless(

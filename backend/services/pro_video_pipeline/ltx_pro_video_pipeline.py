@@ -113,6 +113,7 @@ class LTXProVideoPipeline:
         num_inference_steps: int,
         images: list[ImageConditioningInput],
         output_path: str,
+        png_dir: str | None = None,
     ) -> None:
         tiling_config = default_tiling_config()
         video, audio = self._run_inference(
@@ -128,7 +129,7 @@ class LTXProVideoPipeline:
             tiling_config=tiling_config,
         )
         chunks = video_chunks_number(num_frames, tiling_config)
-        encode_video_output(video=video, audio=audio, fps=int(frame_rate), output_path=output_path, video_chunks_number_value=chunks)
+        encode_video_output(video=video, audio=audio, fps=int(frame_rate), output_path=output_path, video_chunks_number_value=chunks, png_dir=png_dir)
 
     @torch.inference_mode()
     def warmup(self, output_path: str) -> None:
