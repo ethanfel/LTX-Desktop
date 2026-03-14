@@ -199,7 +199,11 @@ class BlendHandler(StateHandlerBase):
                 rt_fps, rt_frames, rt_w, rt_h, total_frames,
             )
 
-            # Diagnostic: compare composite vs retake at gap midpoint
+            # Diagnostic: save retake output copy for inspection and compare frames
+            debug_retake = self.config.outputs_dir / f"_debug_retake_{generation_id}.mkv"
+            import shutil
+            shutil.copy2(retake_output_path, str(debug_retake))
+            logger.info("Debug: retake output saved to %s", debug_retake)
             gap_mid_frame = context_a_frames + gap_frames // 2
             self._log_frame_diff(composite_path, retake_output_path, gap_mid_frame)
 
@@ -422,33 +426,36 @@ class BlendHandler(StateHandlerBase):
     def _log_frame_diff(video_a: str, video_b: str, frame_idx: int) -> None:
         """Log pixel-level difference at a specific frame between two videos."""
         try:
-            probe = [
-                "ffmpeg", "-y",
-                "-i", video_a,
-                "-vf", f"select=eq(n\\,{frame_idx})",
-                "-frames:v", "1",
-                "-f", "rawvideo", "-pix_fmt", "rgb24",
-                "pipe:1",
-            ]
-            ra = subprocess.run(probe, capture_output=True, timeout=10)
-            probe[2] = video_b
-            rb = subprocess.run(probe, capture_output=True, timeout=10)
-            if ra.stdout and rb.stdout:
+            def _read_frame(path: str, idx: int) -> bytes:
+                cmd = [
+                    "ffmpeg", "-y",
+                    "-i", path,
+                    "-vf", f"select=eq(n\\,{idx})",
+                    "-frames:v", "1",
+                    "-f", "rawvideo", "-pix_fmt", "rgb24",
+                    "pipe:1",
+                ]
+                r = subprocess.run(cmd, capture_output=True, timeout=10)
+                return r.stdout
+
+            ba = _read_frame(video_a, frame_idx)
+            bb = _read_frame(video_b, frame_idx)
+            if ba and bb:
                 import numpy as np  # type: ignore[import-untyped]
-                a = np.frombuffer(ra.stdout, dtype=np.uint8)
-                b = np.frombuffer(rb.stdout, dtype=np.uint8)
+                a = np.frombuffer(ba, dtype=np.uint8)
+                b = np.frombuffer(bb, dtype=np.uint8)
                 n = min(len(a), len(b))
                 diff = np.abs(a[:n].astype(np.int16) - b[:n].astype(np.int16))
                 logger.info(
                     "Frame %d diff (composite vs retake): mean=%.1f, max=%d, "
                     "identical=%s (bytes: %d vs %d)",
-                    frame_idx, diff.mean(), diff.max(),
+                    frame_idx, float(diff.mean()), int(diff.max()),
                     bool(np.array_equal(a[:n], b[:n])), len(a), len(b),
                 )
             else:
                 logger.warning(
                     "Frame diff: could not read frame %d (a=%d bytes, b=%d bytes)",
-                    frame_idx, len(ra.stdout), len(rb.stdout),
+                    frame_idx, len(ba), len(bb),
                 )
         except Exception as exc:
             logger.warning("Frame diff probe failed: %s", exc)
