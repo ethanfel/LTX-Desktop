@@ -326,7 +326,7 @@ class BlendHandler(StateHandlerBase):
                 f"trim=end_frame={total_frames},setpts=PTS-STARTPTS[vout]"
             ),
             "-map", "[vout]",
-            "-c:v", "ffv1", "-pix_fmt", "yuv444p",
+            "-c:v", "ffv1", "-pix_fmt", "yuv420p",
             "-r", str(fps),
             "-vsync", "cfr",
             "-an",
