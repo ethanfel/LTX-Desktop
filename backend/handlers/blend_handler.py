@@ -62,28 +62,31 @@ class BlendHandler(StateHandlerBase):
         gap_frames = max(1, round(req.gap_duration * fps))
         context_b_frames = max(1, round(req.context_b * fps))
 
-        # Snap context frames to latent temporal boundaries so the
-        # TemporalRegionMask doesn't accidentally regenerate context
-        # frames.  The VAE uses 8x temporal compression with a causal
-        # first frame, giving pixel boundaries at 1, 9, 17, 25, …
-        # (i.e. 8k+1 for k≥0).  We round UP to the nearest boundary
-        # to ensure complete latent positions of context are preserved.
-        def _snap_to_latent_boundary(frames: int) -> int:
-            """Round frame count up to nearest latent boundary (1, 9, 17, 25, …)."""
+        # Snap frame counts to latent temporal boundaries so the
+        # TemporalRegionMask aligns exactly with latent positions.
+        #
+        # The VAE uses 8x temporal compression with a causal first frame,
+        # giving pixel boundaries at frames 0, [1-8], [9-16], [17-24], …
+        # For the total to satisfy 8k+1:
+        #   context_a = 8a+1  (starts at frame 0, causal)
+        #   gap       = 8m    (complete latent tiles, no mask bleed)
+        #   context_b = 8c    (complete latent tiles)
+        #   total     = (8a+1) + 8m + 8c = 8(a+m+c)+1  ✓
+        def _snap_to_8k_plus_1(frames: int) -> int:
+            """Round frame count up to nearest 8k+1 (1, 9, 17, 25, …)."""
             if frames <= 1:
                 return 1
-            # Boundaries after frame 1 are at 8k+1: 9, 17, 25, 33, …
             k = (frames - 2) // 8 + 1  # ceil((frames-1)/8)
             return k * 8 + 1
 
-        context_a_frames = _snap_to_latent_boundary(context_a_frames)
-        context_b_frames = _snap_to_latent_boundary(context_b_frames)
+        def _snap_to_multiple_of_8(frames: int) -> int:
+            """Round frame count up to nearest multiple of 8."""
+            return max(8, ((frames + 7) // 8) * 8)
 
-        raw_total = context_a_frames + gap_frames + context_b_frames
-        # Snap to 8k+1
-        total_frames = ((raw_total - 1 + 7) // 8) * 8 + 1
-        # Adjust gap frames to absorb the difference
-        gap_frames += total_frames - raw_total
+        context_a_frames = _snap_to_8k_plus_1(context_a_frames)
+        gap_frames = _snap_to_multiple_of_8(gap_frames)
+        context_b_frames = _snap_to_multiple_of_8(context_b_frames)
+        total_frames = context_a_frames + gap_frames + context_b_frames
 
         context_a_duration = context_a_frames / fps
         gap_duration = gap_frames / fps

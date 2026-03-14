@@ -352,51 +352,65 @@ export function GapGenerationModal({
               </div>
             </div>
 
-            {/* Blend overlap control */}
-            {isBlendMode && blendOverlap !== undefined && onBlendOverlapChange && (
-              <div className="px-5 pt-3 pb-0">
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-[10px] text-zinc-500 uppercase font-semibold">Gap per side</label>
-                  <span className="text-[10px] text-zinc-400 tabular-nums">{blendOverlap.toFixed(1)}s ({(blendOverlap * 2).toFixed(1)}s total gap)</span>
-                </div>
-                <input
-                  type="range"
-                  min={0.5}
-                  max={4}
-                  step={0.5}
-                  value={blendOverlap}
-                  onChange={(e) => onBlendOverlapChange(parseFloat(e.target.value))}
-                  className="w-full h-1.5 bg-zinc-700 rounded-full appearance-none cursor-pointer accent-purple-500 [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-purple-400 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:shadow-md"
-                />
-                <div className="flex justify-between text-[9px] text-zinc-600 mt-0.5">
-                  <span>0.5s</span>
-                  <span>4s</span>
-                </div>
-              </div>
-            )}
-
-            {/* Blend context control */}
-            {isBlendMode && blendContext !== undefined && onBlendContextChange && (
-              <div className="px-5 pt-2 pb-0">
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-[10px] text-zinc-500 uppercase font-semibold">Context per side</label>
-                  <span className="text-[10px] text-zinc-400 tabular-nums">{blendContext.toFixed(1)}s</span>
-                </div>
-                <input
-                  type="range"
-                  min={0.5}
-                  max={3}
-                  step={0.5}
-                  value={blendContext}
-                  onChange={(e) => onBlendContextChange(parseFloat(e.target.value))}
-                  className="w-full h-1.5 bg-zinc-700 rounded-full appearance-none cursor-pointer accent-purple-500 [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-purple-400 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:shadow-md"
-                />
-                <div className="flex justify-between text-[9px] text-zinc-600 mt-0.5">
-                  <span>0.5s</span>
-                  <span>3s</span>
-                </div>
-              </div>
-            )}
+            {/* Blend gap & context controls */}
+            {isBlendMode && blendOverlap !== undefined && onBlendOverlapChange && blendContext !== undefined && onBlendContextChange && (() => {
+              const fps = gapSettings.fps
+              // Compute effective frame counts matching backend snapping logic
+              const rawGapFrames = Math.max(1, Math.round(blendOverlap * 2 * fps))
+              const gapFrames = Math.max(8, Math.ceil(rawGapFrames / 8) * 8)
+              const rawCtxAFrames = Math.max(1, Math.round(blendContext * fps))
+              const ctxAFrames = rawCtxAFrames <= 1 ? 1 : (Math.ceil((rawCtxAFrames - 1) / 8)) * 8 + 1
+              const rawCtxBFrames = rawCtxAFrames
+              const ctxBFrames = Math.max(8, Math.ceil(rawCtxBFrames / 8) * 8)
+              const totalFrames = ctxAFrames + gapFrames + ctxBFrames
+              return (
+                <>
+                  <div className="px-5 pt-3 pb-0">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-[10px] text-zinc-500 uppercase font-semibold">Gap per side</label>
+                      <span className="text-[10px] text-zinc-400 tabular-nums">{blendOverlap.toFixed(1)}s/side → {gapFrames}f gap</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0.5}
+                      max={4}
+                      step={0.5}
+                      value={blendOverlap}
+                      onChange={(e) => onBlendOverlapChange(parseFloat(e.target.value))}
+                      className="w-full h-1.5 bg-zinc-700 rounded-full appearance-none cursor-pointer accent-purple-500 [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-purple-400 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:shadow-md"
+                    />
+                    <div className="flex justify-between text-[9px] text-zinc-600 mt-0.5">
+                      <span>0.5s</span>
+                      <span>4s</span>
+                    </div>
+                  </div>
+                  <div className="px-5 pt-2 pb-0">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-[10px] text-zinc-500 uppercase font-semibold">Context per side</label>
+                      <span className="text-[10px] text-zinc-400 tabular-nums">{blendContext.toFixed(1)}s → {ctxAFrames}f+{ctxBFrames}f ctx</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0.5}
+                      max={3}
+                      step={0.5}
+                      value={blendContext}
+                      onChange={(e) => onBlendContextChange(parseFloat(e.target.value))}
+                      className="w-full h-1.5 bg-zinc-700 rounded-full appearance-none cursor-pointer accent-purple-500 [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-purple-400 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:shadow-md"
+                    />
+                    <div className="flex justify-between text-[9px] text-zinc-600 mt-0.5">
+                      <span>0.5s</span>
+                      <span>3s</span>
+                    </div>
+                  </div>
+                  <div className="px-5 pt-1.5 pb-0">
+                    <div className="text-[9px] text-zinc-600 tabular-nums text-center">
+                      Total: {totalFrames}f = 8×{(totalFrames - 1) / 8}+1 @ {fps}fps ({(totalFrames / fps).toFixed(1)}s)
+                    </div>
+                  </div>
+                </>
+              )
+            })()}
 
             {/* Body */}
             <div className="flex-1 overflow-auto px-5 py-4 space-y-4">
