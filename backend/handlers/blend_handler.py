@@ -92,6 +92,15 @@ class BlendHandler(StateHandlerBase):
         gap_duration = gap_frames / fps
         context_b_duration = context_b_frames / fps
 
+        # Retake mask times: offset by half a frame inward to avoid floating
+        # point boundary comparisons.  TemporalRegionMask uses
+        # ``(t_end > start) & (t_start < end)`` — if start_time lands on an
+        # exact latent boundary the comparison result is undefined due to
+        # IEEE-754 rounding differences between Python and PyTorch.
+        half_frame = 0.5 / fps
+        retake_start = context_a_duration + half_frame
+        retake_end = context_a_duration + gap_duration - half_frame
+
         # Seek positions in source videos
         seek_a = max(0, req.seek_end_a - context_a_duration)
         seek_b = req.seek_start_b
@@ -142,7 +151,7 @@ class BlendHandler(StateHandlerBase):
                 gap_frames, gap_duration,
                 context_b_frames, context_b_duration,
                 total_frames,
-                context_a_duration, context_a_duration + gap_duration,
+                retake_start, retake_end,
             )
 
             # Step 3: Run retake on the composite
@@ -163,8 +172,8 @@ class BlendHandler(StateHandlerBase):
             pipeline_state.pipeline.generate_lossless(
                 video_path=composite_path,
                 prompt=req.prompt,
-                start_time=context_a_duration,
-                end_time=context_a_duration + gap_duration,
+                start_time=retake_start,
+                end_time=retake_end,
                 seed=self._resolve_seed(),
                 output_path=retake_output_path,
                 negative_prompt=self.config.default_negative_prompt,
