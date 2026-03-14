@@ -204,11 +204,10 @@ class BlendHandler(StateHandlerBase):
             if self._generation.is_generation_cancelled():
                 raise RuntimeError("Generation was cancelled")
 
-            # Step 4: Extract just the gap portion from the retake output
-            self._extract_gap(
+            # Step 4: Encode the full retake output (context + gap + context)
+            # to H264 so the frontend can use context frames as dissolve handles.
+            self._encode_full_retake(
                 retake_output_path,
-                start_frame=context_a_frames,
-                num_frames=gap_frames,
                 fps=fps,
                 output_path=str(output_path),
             )
@@ -218,7 +217,12 @@ class BlendHandler(StateHandlerBase):
             maybe_extract_pngs(str(output_path), self.state.app_settings.save_png_frames)
             self._generation.update_progress("complete", 100, 1, 1)
             self._generation.complete_generation(str(output_path))
-            return BlendResponse(status="complete", video_path=str(output_path))
+            return BlendResponse(
+                status="complete",
+                video_path=str(output_path),
+                trim_start=context_a_duration,
+                trim_end=context_b_duration,
+            )
 
         except HTTPError:
             if generation_started:
@@ -303,54 +307,30 @@ class BlendHandler(StateHandlerBase):
 
         return composite_path
 
-    def _extract_gap(
-        self,
+    @staticmethod
+    def _encode_full_retake(
         video_path: str,
-        start_frame: int,
-        num_frames: int,
         fps: int,
         output_path: str,
     ) -> None:
-        """Extract the gap portion from the retake output using frame-accurate filters.
+        """Re-encode the full retake output (context + gap + context) to H264.
 
-        Audio timing is derived from exact frame boundaries to avoid sync drift.
+        The full video is kept so the frontend can use preserved context frames
+        as dissolve handles for smooth cross-dissolve transitions.
         """
-        end_frame = start_frame + num_frames
-        # Compute audio boundaries from frame indices for exact sync
-        audio_start = start_frame / fps
-        audio_duration = num_frames / fps
-
-        # Probe whether the input has an audio stream
-        probe_cmd = [
-            "ffprobe", "-v", "error",
-            "-select_streams", "a",
-            "-show_entries", "stream=index",
-            "-of", "csv=p=0",
-            video_path,
-        ]
-        probe_result = subprocess.run(probe_cmd, capture_output=True, text=True, timeout=10)
-        has_audio = bool(probe_result.stdout.strip())
-
         cmd = [
             "ffmpeg", "-y",
             "-i", video_path,
-            "-vf", f"trim=start_frame={start_frame}:end_frame={end_frame},setpts=PTS-STARTPTS",
-        ]
-        if has_audio:
-            cmd += [
-                "-af", f"atrim=start={audio_start}:duration={audio_duration},asetpts=PTS-STARTPTS",
-                "-c:a", "aac",
-            ]
-        else:
-            cmd += ["-an"]
-        cmd += [
             "-c:v", "libx264", "-preset", "fast", "-crf", "14",
+            "-pix_fmt", "yuv420p",
+            "-r", str(fps),
+            "-c:a", "aac",
             output_path,
         ]
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
         if result.returncode != 0:
-            logger.error("ffmpeg extract failed: %s", result.stderr)
-            raise HTTPError(500, f"Failed to extract blend gap: {result.stderr[:500]}")
+            logger.error("ffmpeg encode failed: %s", result.stderr)
+            raise HTTPError(500, f"Failed to encode blend output: {result.stderr[:500]}")
 
     @staticmethod
     def _maybe_lossless_from_pngs(video_path: str) -> tuple[str, str | None]:

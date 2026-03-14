@@ -89,6 +89,8 @@ export function useGapGeneration({
     prompt: string; settings: GenerationSettings
     imageFile: File | null; applyAudio: boolean
     blendCutPoint?: number // original boundary between clips A and B
+    blendTrimStart?: number // seconds of leading context in blend output
+    blendTrimEnd?: number   // seconds of trailing context in blend output
   } | null>(null)
 
   // Gap context-aware prompt suggestion
@@ -296,6 +298,13 @@ export function useGapGeneration({
               throw new Error(data.error || data.detail || 'Blend generation failed')
             }
 
+            // Store trim offsets from backend so placement uses them for dissolve handles
+            setGeneratingGap(prev => prev ? {
+              ...prev,
+              blendTrimStart: data.trim_start ?? 0,
+              blendTrimEnd: data.trim_end ?? 0,
+            } : prev)
+
             // Convert path to file:// URL and set result for the placement effect
             const pathNormalized = data.video_path.replace(/\\/g, '/')
             const videoUrl = pathNormalized.startsWith('/') ? `file://${pathNormalized}` : `file:///${pathNormalized}`
@@ -424,9 +433,14 @@ export function useGapGeneration({
         }
       }
 
-      // For blend mode, dissolve over the frames shared between the
-      // original clips and the blend output (= the overlap that was trimmed).
+      // For blend mode, the output video includes context + gap + context.
+      // The context frames are preserved by the retake model and match the
+      // original clips, so cross-dissolving over them produces a smooth transition.
+      // trimStart/trimEnd hide the context normally; dissolve transitions
+      // extend into these "handles" to reveal matching frames.
       const isBlend = gap.mode === 'blend' && gap.blendCutPoint !== undefined
+      const blendTrimStart = isBlend ? (gap.blendTrimStart ?? 0) : 0
+      const blendTrimEnd = isBlend ? (gap.blendTrimEnd ?? 0) : 0
       const dissolveA = isBlend ? gap.blendCutPoint! - gap.startTime : 0
       const dissolveB = isBlend ? gap.endTime - gap.blendCutPoint! : 0
       const blendTransitionIn = dissolveA > 0
@@ -442,8 +456,8 @@ export function useGapGeneration({
         type: type === 'image' ? 'image' : 'video',
         startTime: gap.startTime,
         duration: gapDuration,
-        trimStart: 0,
-        trimEnd: 0,
+        trimStart: blendTrimStart,
+        trimEnd: blendTrimEnd,
         speed: 1,
         reversed: false,
         muted: false,

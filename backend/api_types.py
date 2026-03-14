@@ -302,6 +302,8 @@ class BlendRequest(BaseModel):
 class BlendResponse(BaseModel):
     status: str
     video_path: str | None = None
+    trim_start: float = 0.0   # Seconds of leading context before the gap
+    trim_end: float = 0.0     # Seconds of trailing context after the gap
 
 
 class IcLoraExtractRequest(BaseModel):
