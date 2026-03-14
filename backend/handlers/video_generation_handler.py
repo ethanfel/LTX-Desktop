@@ -217,8 +217,7 @@ class VideoGenerationHandler(StateHandlerBase):
         images: list[ImageConditioningInput] = []
         temp_image_path: str | None = None
         temp_last_image_path: str | None = None
-        trim_after_generation = False
-        original_num_frames = num_frames
+        trim_frozen_tail = False
         if image is not None:
             temp_image_path = tempfile.NamedTemporaryFile(suffix=".png", delete=False).name
             image.save(temp_image_path)
@@ -228,13 +227,8 @@ class VideoGenerationHandler(StateHandlerBase):
             last_frame_image.save(temp_last_image_path)
             # frame_idx is a latent frame index: convert from pixel frames via temporal scale factor (8)
             last_latent_idx = (num_frames - 1) // 8
-            # Optionally generate 8 extra pixel frames (1 extra latent frame) so the
-            # frozen tail from last-frame conditioning gets trimmed away.
-            if settings.flf_trim_frozen_tail:
-                num_frames = num_frames + 8  # one extra latent frame
-                trim_after_generation = True
-                logger.info("FLF trim enabled: generating %d frames (will trim to %d)", num_frames, original_num_frames)
             images.append(ImageConditioningInput(path=temp_last_image_path, frame_idx=last_latent_idx, strength=last_frame_strength))
+            trim_frozen_tail = settings.flf_trim_frozen_tail
 
         output_path = self._make_output_path()
 
@@ -293,9 +287,11 @@ class VideoGenerationHandler(StateHandlerBase):
                     output_path.unlink()
                 raise RuntimeError("Generation was cancelled")
 
-            # Trim extra frames generated for FLF frozen-tail workaround
-            if trim_after_generation and output_path.exists():
-                self._trim_video_frames(str(output_path), original_num_frames, fps)
+            # Trim the last 8 frozen frames caused by last-frame conditioning
+            if trim_frozen_tail and output_path.exists():
+                trimmed_frames = num_frames - 8  # remove the last latent frame's pixel frames
+                self._trim_video_frames(str(output_path), trimmed_frames, fps)
+                logger.info("FLF trim: removed last 8 frozen frames (%d -> %d)", num_frames, trimmed_frames)
 
             t_total_end = time.perf_counter()
             logger.info("[%s] Total generation: %.2fs (load=%.2fs, text=%.2fs, inference=%.2fs)",

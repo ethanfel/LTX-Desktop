@@ -789,7 +789,7 @@ export function SettingsModal({ isOpen, onClose, initialTab }: SettingsModalProp
                       </label>
                     </div>
                     <p className="text-xs text-zinc-500 leading-relaxed">
-                      Generate 8 extra frames then trim. The frozen last-frame frames are replaced by the model's natural continuation past the target. Uses slightly more GPU time but eliminates the static tail.
+                      Remove the last 8 frames from FLF generations. The last conditioned latent frame decodes to 8 nearly-identical pixel frames — this trims them off, making the video slightly shorter but eliminating the frozen tail.
                     </p>
                   </div>
 
