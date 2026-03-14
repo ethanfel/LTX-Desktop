@@ -742,6 +742,72 @@ export function SettingsModal({ isOpen, onClose, initialTab }: SettingsModalProp
                 </div>
               </div>
 
+              {/* Last Frame Strength Setting */}
+              <div className="space-y-3 pt-4 border-t border-zinc-800">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <svg className="h-4 w-4 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18" />
+                      <line x1="7" y1="2" x2="7" y2="22" />
+                      <line x1="17" y1="2" x2="17" y2="22" />
+                      <line x1="2" y1="12" x2="22" y2="12" />
+                      <line x1="2" y1="7" x2="7" y2="7" />
+                      <line x1="2" y1="17" x2="7" y2="17" />
+                      <line x1="17" y1="7" x2="22" y2="7" />
+                      <line x1="17" y1="17" x2="22" y2="17" />
+                    </svg>
+                    <label className="text-sm font-medium text-white">
+                      Last Frame Strength
+                    </label>
+                    <span className="text-xs text-zinc-500">{settings.lastFrameStrength.toFixed(2)}</span>
+                  </div>
+                  <p className="text-xs text-zinc-500 leading-relaxed mb-2">
+                    Controls how strongly the last frame image conditions the generation. Lower values allow more motion near the end but less fidelity to the target. The last latent frame covers 8 pixel frames, so high strength can cause a frozen tail.
+                  </p>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={settings.lastFrameStrength}
+                    onChange={(e) => onSettingsChange({ ...settings, lastFrameStrength: Number(e.target.value) })}
+                    className="w-full accent-amber-500"
+                  />
+                </div>
+              </div>
+
+              {/* FLF Trim Frozen Tail Setting */}
+              <div className="space-y-3 pt-4 border-t border-zinc-800">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <svg className="h-4 w-4 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polygon points="5 3 19 12 5 21 5 3" />
+                      </svg>
+                      <label className="text-sm font-medium text-white">
+                        Trim FLF Frozen Tail
+                      </label>
+                    </div>
+                    <p className="text-xs text-zinc-500 leading-relaxed">
+                      Generate 8 extra frames then trim. The frozen last-frame frames are replaced by the model's natural continuation past the target. Uses slightly more GPU time but eliminates the static tail.
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => onSettingsChange({ ...settings, flfTrimFrozenTail: !settings.flfTrimFrozenTail })}
+                    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                      settings.flfTrimFrozenTail ? 'bg-amber-500' : 'bg-zinc-700'
+                    }`}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                        settings.flfTrimFrozenTail ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+              </div>
+
               {/* Anonymous Analytics Setting */}
               <div className="space-y-3 pt-4 border-t border-zinc-800">
                 <div className="flex items-start justify-between gap-4">

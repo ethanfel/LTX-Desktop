@@ -76,6 +76,16 @@ class AppSettings(SettingsBaseModel):
     locked_seed: int = 42
     models_dir: str = ""
     save_png_frames: bool = False
+    last_frame_strength: float = 0.8
+    flf_trim_frozen_tail: bool = False
+
+    @field_validator("last_frame_strength", mode="before")
+    @classmethod
+    def _clamp_last_frame_strength(cls, value: Any) -> float:
+        if value is None:
+            return 0.8
+        v = float(value)
+        return max(0.0, min(1.0, v))
 
     @field_validator("prompt_cache_size", mode="before")
     @classmethod
@@ -149,6 +159,8 @@ class SettingsResponse(SettingsBaseModel):
     locked_seed: int = 42
     models_dir: str = ""
     save_png_frames: bool = False
+    last_frame_strength: float = 0.8
+    flf_trim_frozen_tail: bool = False
 
 
 def to_settings_response(settings: AppSettings) -> SettingsResponse:

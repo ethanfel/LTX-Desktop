@@ -13,5 +13,7 @@
     "use_upscaler": true
   },
   "prompt_cache_size": 100,
-  "save_png_frames": false
+  "save_png_frames": false,
+  "last_frame_strength": 0.8,
+  "flf_trim_frozen_tail": false
 }

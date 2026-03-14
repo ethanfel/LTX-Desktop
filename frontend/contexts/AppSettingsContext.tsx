@@ -27,6 +27,8 @@ export interface AppSettings {
   lockedSeed: number
   modelsDir: string
   savePngFrames: boolean
+  lastFrameStrength: number
+  flfTrimFrozenTail: boolean
 }
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
@@ -46,6 +48,8 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   lockedSeed: 42,
   modelsDir: '',
   savePngFrames: false,
+  lastFrameStrength: 0.8,
+  flfTrimFrozenTail: false,
 }
 
 type BackendProcessStatus = 'alive' | 'restarting' | 'dead'
@@ -95,6 +99,8 @@ function normalizeAppSettings(data: Partial<AppSettings>): AppSettings {
     lockedSeed: data.lockedSeed ?? DEFAULT_APP_SETTINGS.lockedSeed,
     modelsDir: data.modelsDir ?? DEFAULT_APP_SETTINGS.modelsDir,
     savePngFrames: data.savePngFrames ?? DEFAULT_APP_SETTINGS.savePngFrames,
+    lastFrameStrength: data.lastFrameStrength ?? DEFAULT_APP_SETTINGS.lastFrameStrength,
+    flfTrimFrozenTail: data.flfTrimFrozenTail ?? DEFAULT_APP_SETTINGS.flfTrimFrozenTail,
   }
 }
 

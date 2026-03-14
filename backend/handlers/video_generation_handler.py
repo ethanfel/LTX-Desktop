@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import subprocess
 import tempfile
 import time
 import uuid
@@ -140,6 +141,9 @@ class VideoGenerationHandler(StateHandlerBase):
             self._pipelines.load_gpu_pipeline(model_type, should_warm=False, lora_path=lora_path, lora_strength=lora_strength)
             self._generation.start_generation(generation_id)
 
+            # Use app setting for last frame strength (request default is just a fallback)
+            effective_strength = self.state.app_settings.last_frame_strength
+
             output_path = self.generate_video(
                 prompt=req.prompt,
                 image=image,
@@ -153,7 +157,7 @@ class VideoGenerationHandler(StateHandlerBase):
                 lora_path=lora_path,
                 lora_strength=lora_strength,
                 last_frame_image=last_frame_image,
-                last_frame_strength=req.lastFrameStrength,
+                last_frame_strength=effective_strength,
                 model_type=model_type,
             )
 
@@ -207,11 +211,14 @@ class VideoGenerationHandler(StateHandlerBase):
 
         self._generation.update_progress("encoding_text", 10, 0, total_steps)
 
+        settings = self.state.app_settings
         enhanced_prompt = prompt + self.config.camera_motion_prompts.get(camera_motion, "")
 
         images: list[ImageConditioningInput] = []
         temp_image_path: str | None = None
         temp_last_image_path: str | None = None
+        trim_after_generation = False
+        original_num_frames = num_frames
         if image is not None:
             temp_image_path = tempfile.NamedTemporaryFile(suffix=".png", delete=False).name
             image.save(temp_image_path)
@@ -221,12 +228,17 @@ class VideoGenerationHandler(StateHandlerBase):
             last_frame_image.save(temp_last_image_path)
             # frame_idx is a latent frame index: convert from pixel frames via temporal scale factor (8)
             last_latent_idx = (num_frames - 1) // 8
+            # Optionally generate 8 extra pixel frames (1 extra latent frame) so the
+            # frozen tail from last-frame conditioning gets trimmed away.
+            if settings.flf_trim_frozen_tail:
+                num_frames = num_frames + 8  # one extra latent frame
+                trim_after_generation = True
+                logger.info("FLF trim enabled: generating %d frames (will trim to %d)", num_frames, original_num_frames)
             images.append(ImageConditioningInput(path=temp_last_image_path, frame_idx=last_latent_idx, strength=last_frame_strength))
 
         output_path = self._make_output_path()
 
         try:
-            settings = self.state.app_settings
             use_api_encoding = not self._text.should_use_local_encoding()
             if has_any_image:
                 enhance = use_api_encoding and settings.prompt_enhancer_enabled_i2v
@@ -280,6 +292,10 @@ class VideoGenerationHandler(StateHandlerBase):
                 if output_path.exists():
                     output_path.unlink()
                 raise RuntimeError("Generation was cancelled")
+
+            # Trim extra frames generated for FLF frozen-tail workaround
+            if trim_after_generation and output_path.exists():
+                self._trim_video_frames(str(output_path), original_num_frames, fps)
 
             t_total_end = time.perf_counter()
             logger.info("[%s] Total generation: %.2fs (load=%.2fs, text=%.2fs, inference=%.2fs)",
@@ -423,6 +439,32 @@ class VideoGenerationHandler(StateHandlerBase):
             logger.info("Using locked seed: %s", settings.locked_seed)
             return settings.locked_seed
         return int(time.time()) % 2147483647
+
+    @staticmethod
+    def _trim_video_frames(video_path: str, target_frames: int, fps: float) -> None:
+        """Trim a video to exactly target_frames using ffmpeg.
+
+        Used by the FLF frozen-tail workaround: we generate extra frames then
+        cut the video to the originally requested duration.
+        """
+        duration = target_frames / fps
+        tmp_path = video_path + ".trimmed.mp4"
+        cmd = [
+            "ffmpeg", "-y",
+            "-i", video_path,
+            "-t", f"{duration:.6f}",
+            "-c:v", "copy", "-c:a", "copy",
+            tmp_path,
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        if result.returncode != 0:
+            logger.error("FLF trim failed: %s", result.stderr[:500])
+            # Keep the untrimmed video rather than failing
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+            return
+        os.replace(tmp_path, video_path)
+        logger.info("FLF trim: %s trimmed to %.2fs (%d frames)", video_path, duration, target_frames)
 
     def _make_output_path(self) -> Path:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
