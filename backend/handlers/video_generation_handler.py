@@ -120,6 +120,18 @@ class VideoGenerationHandler(StateHandlerBase):
             case "16:9":
                 width, height = get_16_9_size(resolution)
 
+        # When upscaler is disabled, halve the resolution so the pipeline's
+        # stage-2 output matches what stage-1 would produce at native res.
+        settings = self.state.app_settings
+        if model_type == "fast" and not settings.fast_model.use_upscaler:
+            width = round(width / 2 / 64) * 64
+            height = round(height / 2 / 64) * 64
+            logger.info("Upscaler off — native resolution %dx%d", width, height)
+        elif model_type in ("pro", "hq") and not settings.pro_model.use_upscaler:
+            width = round(width / 2 / 64) * 64
+            height = round(height / 2 / 64) * 64
+            logger.info("Upscaler off — native resolution %dx%d", width, height)
+
         num_frames = self._compute_num_frames(duration, fps)
 
         image = None
