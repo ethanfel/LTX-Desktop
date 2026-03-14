@@ -232,9 +232,11 @@ export function usePlaybackEngine(params: UsePlaybackEngineParams) {
               const vd = outVid.duration
               if (!isNaN(vd)) {
                 const usable = vd - outClip.trimStart - outClip.trimEnd
+                // Extend into trimEnd handle during dissolve-out (shows preserved "common frames")
+                const trimExtension = outClip.reversed ? 0 : dissolveInfo.progress * outClip.trimEnd
                 const tt = outClip.reversed
                   ? Math.max(0, Math.min(vd, outClip.trimStart + usable - timeInClip * outClip.speed))
-                  : Math.max(0, Math.min(vd, outClip.trimStart + timeInClip * outClip.speed))
+                  : Math.max(0, Math.min(vd, outClip.trimStart + timeInClip * outClip.speed + trimExtension))
                 if (outClip.reversed) {
                   if (!outVid.paused) outVid.pause()
                   if (!isNaN(tt) && Math.abs(outVid.currentTime - tt) > 0.04) outVid.currentTime = tt
@@ -256,7 +258,7 @@ export function usePlaybackEngine(params: UsePlaybackEngineParams) {
             const clip = dissolveInfo.incoming
             const videoDuration = inVid.duration
             const usableMedia = videoDuration - clip.trimStart - clip.trimEnd
-            const timeInClip = Math.max(0, next - clip.startTime)
+            const timeInClip = next - clip.startTime  // Allow negative during dissolve to seek into trim handle
             const targetTime = clip.reversed
               ? Math.max(0, Math.min(videoDuration, clip.trimStart + usableMedia - timeInClip * clip.speed))
               : Math.max(0, Math.min(videoDuration, clip.trimStart + timeInClip * clip.speed))
@@ -708,8 +710,8 @@ export function usePlaybackEngine(params: UsePlaybackEngineParams) {
             video.load()
           }
           
-          const timeInClip = Math.max(0, currentTime - incoming.startTime)
-          
+          const timeInClip = currentTime - incoming.startTime  // Allow negative during dissolve to seek into trim handle
+
           const syncIncoming = () => {
             if (!video || !video.duration || isNaN(video.duration)) return
             const videoDuration = video.duration
@@ -806,10 +808,13 @@ export function usePlaybackEngine(params: UsePlaybackEngineParams) {
       
       const videoDuration = video.duration
       const usableMediaDuration = videoDuration - syncClip.trimStart - syncClip.trimEnd
-      
-      const targetTime = syncClip.reversed 
+      // Extend into trimEnd handle when this clip is the outgoing side of a dissolve
+      const trimExtension = (crossDissolveState && syncClip.id === crossDissolveState.outgoing.id && !syncClip.reversed)
+        ? crossDissolveState.progress * syncClip.trimEnd : 0
+
+      const targetTime = syncClip.reversed
         ? Math.max(0, Math.min(videoDuration, syncClip.trimStart + usableMediaDuration - timeInClip * syncClip.speed))
-        : Math.max(0, Math.min(videoDuration, syncClip.trimStart + timeInClip * syncClip.speed))
+        : Math.max(0, Math.min(videoDuration, syncClip.trimStart + timeInClip * syncClip.speed + trimExtension))
       
       if (syncClip.reversed) {
         if (!video.paused) video.pause()
