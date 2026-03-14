@@ -297,6 +297,9 @@ class VideoGenerationHandler(StateHandlerBase):
                 extra = 9 if settings.flf_trim_transition_frame else 8
                 trimmed_frames = num_frames - extra
                 self._trim_video_frames(str(output_path), trimmed_frames, fps)
+                # Also trim extra PNGs to match the trimmed video
+                if raw_png_dir is not None:
+                    self._trim_png_frames(raw_png_dir, trimmed_frames)
                 logger.info("FLF trim: removed last %d frames (%d -> %d)", extra, num_frames, trimmed_frames)
 
             t_total_end = time.perf_counter()
@@ -467,6 +470,21 @@ class VideoGenerationHandler(StateHandlerBase):
             return
         os.replace(tmp_path, video_path)
         logger.info("FLF trim: %s trimmed to %d frames (%.2fs)", video_path, target_frames, target_frames / fps)
+
+    @staticmethod
+    def _trim_png_frames(png_dir: str, keep_frames: int) -> None:
+        """Delete PNG frames beyond keep_frames count to match trimmed video."""
+        png_path = Path(png_dir)
+        if not png_path.is_dir():
+            return
+        # PNGs are named frame_00001.png, frame_00002.png, ...
+        for frame_file in sorted(png_path.glob("frame_*.png")):
+            try:
+                idx = int(frame_file.stem.split("_")[1])
+            except (IndexError, ValueError):
+                continue
+            if idx > keep_frames:
+                frame_file.unlink()
 
     def _make_output_path(self) -> Path:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
